@@ -6,6 +6,7 @@ from typing import List
 from models.pending_client import PendingClient
 from dotenv import load_dotenv
 import os
+from flet.security import encrypt, decrypt
 
 load_dotenv()
 
@@ -18,13 +19,13 @@ class PDFExtractor:
 
     def validate_pdf_path(self) -> bool:
         if not isinstance(self.pdf_path, str) or not self.pdf_path.lower().endswith('.pdf'):
-            print(f"Erro: Arquivo deve ser um PDF válido, recebido: {self.pdf_path}")
+            print("Erro: O arquivo precisa ser PDF. Avise o suporte.")
             return False
         try:
             with open(self.pdf_path, 'rb'):
                 return True
         except Exception as e:
-            print(f"Erro ao acessar o PDF: {e}")
+            print(f"Erro ao abrir o PDF. Envie isso ao suporte: {e}")
             return False
 
     def extract_text_from_pdf(self) -> str:
@@ -34,16 +35,21 @@ class PDFExtractor:
             doc = pp.open(self.pdf_path)
             text = "\n".join(page.get_text("text") or "" for page in doc)
             doc.close()
-            return text if text.strip() else ""
+            secret_key = os.getenv("MY_APP_SECRET_KEY")
+            return encrypt(text, secret_key) if text.strip() else ""
         except Exception as e:
-            print(f"Erro ao extrair texto do PDF: {e}")
+            print(f"Erro ao ler o PDF. Envie isso ao suporte: {e}")
             return ""
 
     def validate_extracted_text(self, text: str) -> bool:
+        secret_key = os.getenv("MY_APP_SECRET_KEY")
+        decrypted_text = decrypt(text, secret_key)
         keywords = ["inadimplente", "inadimplência", "atraso", "renegociado", "vencimento", "dívida"]
-        return isinstance(text, str) and any(keyword.lower() in text.lower() for keyword in keywords)
+        return isinstance(decrypted_text, str) and any(keyword.lower() in decrypted_text.lower() for keyword in keywords)
 
     def extract_clients_with_claude(self, text: str) -> List[dict]:
+        secret_key = os.getenv("MY_APP_SECRET_KEY")
+        decrypted_text = decrypt(text, secret_key)
         if not self.validate_extracted_text(text):
             return []
         prompt = (
@@ -55,7 +61,7 @@ class PDFExtractor:
             "contact (Contato/Telefone, in (XX) XXXXX-XXXX format). "
             "If a column is missing or named differently, infer the data based on context. "
             "Return the result as a JSON array, wrapped in a Markdown code block (```json ... ```). "
-            f"{text[:self.MAX_TEXT_LENGTH]}"
+            f"{decrypted_text[:self.MAX_TEXT_LENGTH]}"
         )
         try:
             message = self.client.messages.create(
@@ -67,7 +73,7 @@ class PDFExtractor:
             json_match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
             return json.loads(json_match.group(1)) if json_match else []
         except Exception as e:
-            print(f"Erro ao processar resposta da API: {e}")
+            print(f"Erro ao processar o relatório. Envie isso ao suporte: {e}")
             return []
 
     def validate_client_data(self, client_data: dict) -> bool:

@@ -1,4 +1,5 @@
 import logging
+import os
 import flet as ft
 from components.app_layout import create_app_layout
 from routes import setup_routes
@@ -47,11 +48,17 @@ def main(page: ft.Page):
         "logo": "https://picsum.photos/150",
         "contact_email": "example@email.com",
         "contact_phone": "(11) 99999-9999",
+        "secret_key": os.getenv("MY_APP_SECRET_KEY")
     }
+
+    usage_tracker = app_state["usage_tracker"]
+    usage_tracker.usage["messages_sent"] = page.client_storage.get("debtmanager.messages_sent") or 0
 
     setup_routes(page, layout, app_state, app_state, company_data)
     page.on_app_lifecycle_state_change = handle_lifecycle_change
 
 
 if __name__ == "__main__":
+    os.environ["FLET_LOG_LEVEL"] = "info"
+    os.environ["FLET_LOG_TO_FILE"] = "true"
     ft.app(target=main)

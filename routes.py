@@ -36,28 +36,38 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     bgcolor=current_color_scheme.background,
                     center_title=True,
                     actions=[
-                        ft.IconButton(
-                            ft.Icons.WB_SUNNY_OUTLINED,
-                            tooltip="Alternar Tema",
-                            on_click=lambda e: layout_data["toggle_theme"](),
-                            icon_color=current_color_scheme.primary
-                        ),
+                     
+                        # ft.Container(
+                        #     content=ft.Stack(
+                        #         [
+                        #             ft.CircleAvatar(
+                        #                 foreground_image_src="https://robohash.org/{username}.png",
+                        #                 content=ft.Text(user_initials),
+                        #             ),
+                        #             ft.Container(
+                        #                 content=ft.CircleAvatar(
+                        #                     bgcolor=ft.colors.GREEN, radius=5),
+                        #                 alignment=ft.alignment.bottom_left,
+                        #             ),
+                        #         ],
+                        #         width=40,
+                        #         height=40,
+                        #     ),
+                        #     tooltip=f"Logado como {username}",
+                        # ),
                         ft.PopupMenuButton(
                             icon=ft.Icons.PERSON,
                             tooltip="Perfil",
                             icon_color=current_color_scheme.primary,
-                            content=ft.Container(
-                                content=ft.CircleAvatar(
-                                    foreground_image_src=company_data["logo"] if company_data["logo"].startswith(
-                                        "http") else None,
-                                    content=ft.Image(src=company_data["logo"], fit=ft.ImageFit.COVER) if not company_data["logo"].startswith("http") else ft.Text(
-                                        company_data["name"][0].upper(), size=20, weight=ft.FontWeight.BOLD),
-                                    width=40,
-                                    height=40,
-
+                            content=ft.CircleAvatar(
+                                content=ft.Image(
+                                    src=company_data["logo"],
+                                    fit=ft.ImageFit.COVER,
+                                    border_radius=50,
                                 ),
-                                padding=20
-                            ),
+                                radius=30,
+                                bgcolor=current_color_scheme.primary_container
+                                ),
                             items=[
                                 ft.PopupMenuItem(
                                     text="Meu Perfil",

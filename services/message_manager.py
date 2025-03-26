@@ -4,21 +4,24 @@ from twilio.rest import Client
 import os
 from dotenv import load_dotenv
 from utils.database import add_notification, save_notification
+from flet.security import encrypt, decrypt
+
 load_dotenv()
 
 
 class MessageManager:
     def __init__(self):
-        self.TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "your_account_sid")
-        self.TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "your_auth_token")
+        secret_key = os.getenv("MY_APP_SECRET_KEY")
+        encrypted_sid = encrypt(os.getenv("TWILIO_ACCOUNT_SID"), secret_key)
+        encrypted_token = encrypt(os.getenv("TWILIO_AUTH_TOKEN"), secret_key)
+        self.TWILIO_ACCOUNT_SID = decrypt(encrypted_sid, secret_key)
+        self.TWILIO_AUTH_TOKEN = decrypt(encrypted_token, secret_key)
         self.TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
         self.client = Client(self.TWILIO_ACCOUNT_SID, self.TWILIO_AUTH_TOKEN)
 
     def generate_notifications(self, clients: List[PendingClient]) -> None:
-        print("\n=== Mensagens simuladas para WhatsApp ===")
         for client in clients:
             print(client.format_whatsapp_message())
-        print("====================================\n")
 
     def send_all_notifications(self, clients: List[PendingClient], custom_message=None) -> None:
         for client in clients:
@@ -42,11 +45,11 @@ class MessageManager:
                     return True
                 return False
             except Exception as e:
-                print(f"Erro ao enviar mensagem para {client.name}: {e}")
-                add_notification(client.name, message_body, f"Failed: {str(e)}")
+                print(f"Erro ao enviar mensagem: Algo deu errado. Envie isso ao suporte: {e}")
+                add_notification(client.name, message_body, "Falha: Problema ao enviar. Contate o suporte.")
                 return False
         else:
-            print(f"Número inválido para {client.name}: {client.contact}")
+            print(f"Número inválido para {client.name}: {client.contact}. Avise o suporte se precisar de ajuda.")
             add_notification(client.name, message_body if custom_message else client.format_whatsapp_message(),
-                             "Failed: Invalid number")
+                             "Falha: Número inválido. Contate o suporte.")
             return False
