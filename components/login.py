@@ -4,7 +4,6 @@ import requests
 from flet.security import decrypt
 from dotenv import load_dotenv
 import os
-from animations import loading_animation, success_animation
 from datetime import datetime, timezone, timedelta
 from time import sleep
 
@@ -17,16 +16,48 @@ logger = logging.getLogger(__name__)
 
 
 def show_loading(page, message="Processando..."):
-    page.clean()
-    page.add(loading_animation(message))
+    loading_dialog = ft.AlertDialog(
+        content=ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.ProgressRing(),
+                    ft.Text(message, size=18, weight=ft.FontWeight.BOLD)
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            alignment=ft.alignment.center,
+        ),
+        bgcolor=ft.colors.TRANSPARENT,
+        modal=True,
+        disabled=True,
+    )
+    page.open(loading_dialog)
     page.update()
+    sleep(1)
 
 
 def show_success_and_redirect(page, route, message="Sucesso!"):
-    page.clean()
-    page.add(success_animation(message))
+    success_dialog = ft.AlertDialog(
+        content=ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.colors.GREEN),
+                    ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN)
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            alignment=ft.alignment.center,
+        ),
+        bgcolor=ft.colors.TRANSPARENT,
+        modal=True,
+        disabled=True,
+    )
+    page.open(success_dialog)
     page.update()
-    sleep(2)
+    sleep(3)
+    page.close(success_dialog)
     page.go(route)
 
 
@@ -34,7 +65,6 @@ def create_login_page(page: ft.Page):
     username_field = ft.TextField(label="USER", width=300, border_color=ft.colors.BLUE)
     activation_code_field = ft.TextField(label="CODE", width=300, border_color=ft.colors.BLUE)
     status_text = ft.Text("", color=ft.colors.RED)
-
     activate_button = ft.ElevatedButton("ATIVA", bgcolor=ft.colors.BLUE, color=ft.colors.WHITE)
     login_button = ft.ElevatedButton("ACESSA", visible=False, bgcolor=ft.colors.BLUE, color=ft.colors.WHITE)
     register_button = ft.TextButton("REGISTRA", on_click=lambda _: page.go("/register"))

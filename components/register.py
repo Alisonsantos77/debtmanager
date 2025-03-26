@@ -7,7 +7,6 @@ from flet.security import encrypt
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
 from datetime import datetime
-from animations import loading_animation, success_animation
 from time import sleep
 import random
 import string
@@ -39,16 +38,48 @@ def send_verification_email(username, email, code):
 
 
 def show_loading(page, message="Processando..."):
-    page.clean()
-    page.add(loading_animation(message))
+    loading_dialog = ft.AlertDialog(
+        content=ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.ProgressRing(),
+                    ft.Text(message, size=18, weight=ft.FontWeight.BOLD)
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            alignment=ft.alignment.center,
+        ),
+        bgcolor=ft.colors.TRANSPARENT,
+        modal=True,
+        disabled=True,
+    )
+    page.open(loading_dialog)
     page.update()
+    sleep(1)
 
 
 def show_success_and_redirect(page, route, message="Sucesso!"):
-    page.clean()
-    page.add(success_animation(message))
+    success_dialog = ft.AlertDialog(
+        content=ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.colors.GREEN),
+                    ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN)
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            alignment=ft.alignment.center,
+        ),
+        bgcolor=ft.colors.TRANSPARENT,
+        modal=True,
+        disabled=True,
+    )
+    page.open(success_dialog)
     page.update()
-    sleep(2)
+    sleep(3)
+    page.close(success_dialog)
     page.go(route)
 
 

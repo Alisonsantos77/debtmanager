@@ -55,7 +55,9 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                     border_radius=50,
                                 ),
                                 radius=30,
-                                bgcolor=current_color_scheme.primary_container
+                                bgcolor=current_color_scheme.primary_container,
+                                width=35,
+                                height=35
                             ),
                             items=[
                                 ft.PopupMenuItem(
