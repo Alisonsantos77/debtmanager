@@ -1,7 +1,5 @@
-import logging
-
 import flet as ft
-
+import logging
 from components.client_details import create_client_details_page
 from components.dashboard import create_dashboard_page
 from components.navigation_drawer import create_drawer
@@ -16,9 +14,11 @@ logger = logging.getLogger(__name__)
 
 def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: dict):
     current_color_scheme = get_current_color_scheme(page)
-    
+
     def logout(e):
         page.client_storage.remove("user_id")
+        page.client_storage.remove("pending_username")
+        page.client_storage.remove("username")
         print("Usuário deslogado")
         page.go("/login")
         page.update()
@@ -56,7 +56,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                 ),
                                 radius=30,
                                 bgcolor=current_color_scheme.primary_container
-                                ),
+                            ),
                             items=[
                                 ft.PopupMenuItem(
                                     text="Meu Perfil",
@@ -92,7 +92,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                 vertical_alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
             ))
-        
 
         if page.route == "/clients":
             page.title = "Clientes"
@@ -116,7 +115,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
                 )
             )
-            
+
         elif page.route == "/dashboard":
             page.title = "Dashboard"
             page.views.append(

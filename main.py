@@ -1,38 +1,59 @@
 import logging
-import os
 import flet as ft
 from components.app_layout import create_app_layout
 from routes import setup_routes
-from utils.auth import verificar_status_usuario
+from datetime import datetime, timezone
+import time
+import requests
+import os
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.FileHandler('app.log'), logging.StreamHandler()]
 )
-
 logger = logging.getLogger(__name__)
-logger.info('Iniciando aplicação...')
 
+SUPABASE_KEY_USERS = os.getenv("SUPABASE_KEY_USERS")
+SUPABASE_URL_USERS = os.getenv("SUPABASE_URL_USERS")
+headers = {"apikey": SUPABASE_KEY_USERS, "Authorization": f"Bearer {SUPABASE_KEY_USERS}"}
+
+def verificar_status_usuario(page):
+    retries = 5
+    delay = 5
+    max_delay = 32
+    for attempt in range(retries):
+        try:
+            user_id = page.client_storage.get("user_id")
+            if not user_id or page.route in ["/login", "/register"]:
+                return
+            cached_status = page.client_storage.get("user_status")
+            last_checked = page.client_storage.get("last_checked") or 0
+            if cached_status and time.time() - last_checked < 600:
+                if cached_status == "inativo":
+                    page.client_storage.clear()
+                    page.go("/login")
+                return
+            user_data = requests.get(f"{SUPABASE_URL_USERS}/rest/v1/users_debt?id=eq.{user_id}", headers=headers).json()
+            status = user_data[0]["status"] if user_data else "inativo"
+            page.client_storage.set("user_status", status)
+            page.client_storage.set("last_checked", time.time())
+            if status != "ativo":
+                page.client_storage.clear()
+                page.go("/login")
+            break
+        except Exception as e:
+            logger.error(f"Erro ao verificar status: {e}")
+            time.sleep(min(delay, max_delay))
+            delay *= 2
 
 def main(page: ft.Page):
-    cores_light = {
-        "primary": "#3B82F6",
-        "on_primary": "#FFFFFF",
-        "primary_container": "#DBEAFE",
-        "on_surface": "#111827",
-        "surface": "#F9FAFB",
-    }
-    cores_dark = {
-        "primary": "#60A5FA",
-        "on_primary": "#1E3A8A",
-        "primary_container": "#1E3A8A",
-        "on_surface": "#FFFFFF",
-        "surface": "#111827",
-    }
+    cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF", "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}
+    cores_dark = {"primary": "#60A5FA", "on_primary": "#1E3A8A", "primary_container": "#1E3A8A", "on_surface": "#FFFFFF", "surface": "#111827"}
     page.theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_light))
     page.dark_theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_dark))
-    page.theme_mode = ft.ThemeMode.DARK
+    theme_mode = page.client_storage.get("theme_mode") or "DARK"
+    page.theme_mode = ft.ThemeMode.DARK if theme_mode == "DARK" else ft.ThemeMode.LIGHT
 
     def handle_lifecycle_change(e: ft.AppLifecycleStateChangeEvent):
         if e.data == "inactive":
@@ -42,10 +63,6 @@ def main(page: ft.Page):
             logger.info("Aplicação voltou ao primeiro plano")
             page.session.set("app_in_background", False)
             verificar_status_usuario(page)
-            if not page.client_storage.get("user_id"):
-                page.go("/login")
-            else:
-                page.go(page.route or "/")
             page.update()
 
     layout, app_state = create_app_layout(page)
@@ -63,8 +80,12 @@ def main(page: ft.Page):
     setup_routes(page, layout, app_state, app_state, company_data)
     page.on_app_lifecycle_state_change = handle_lifecycle_change
 
+    verificar_status_usuario(page)
+    if not page.client_storage.get("user_id") and page.route not in ["/login", "/register"]:
+        page.go("/login")
+
+    page.update()
 
 if __name__ == "__main__":
     os.environ["FLET_LOG_LEVEL"] = "info"
-    os.environ["FLET_LOG_TO_FILE"] = "true"
     ft.app(target=main)

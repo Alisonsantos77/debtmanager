@@ -1,11 +1,15 @@
 import flet as ft
+import os
+from dotenv import load_dotenv
 
-LOTTIE_LOADING = "https://lottie.host/e651e108-963f-4983-a782-8ea9db7cca87/Q0wQ48OKBQ.json"
-LOTTIE_SUCCESS = "https://lottie.host/95a8b77b-108b-4893-b3bb-2ea16b1a8a0e/dUl0wlFl1q.json"
+load_dotenv()
+LOTTIE_LOADING = os.getenv(
+    "LOTTIE_LOADING_URL")
+LOTTIE_SUCCESS = os.getenv(
+    "LOTTIE_SUCCESS_URL")
 
 
 def loading_animation(message: str = "Processando...") -> ft.Column:
-    """Retorna uma coluna com a animação de carregamento e um texto dinâmico."""
     return ft.Column(
         controls=[
             ft.Lottie(
@@ -23,7 +27,6 @@ def loading_animation(message: str = "Processando...") -> ft.Column:
 
 
 def success_animation(message: str = "Sucesso!") -> ft.Column:
-    """Retorna uma coluna com a animação de sucesso e um texto dinâmico."""
     return ft.Column(
         controls=[
             ft.Lottie(
