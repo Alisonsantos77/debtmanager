@@ -3,6 +3,7 @@ import os
 import flet as ft
 from components.app_layout import create_app_layout
 from routes import setup_routes
+from utils.auth import verificar_status_usuario
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +41,11 @@ def main(page: ft.Page):
         elif e.data == "active":
             logger.info("Aplicação voltou ao primeiro plano")
             page.session.set("app_in_background", False)
+            verificar_status_usuario(page)
+            if not page.client_storage.get("user_id"):
+                page.go("/login")
+            else:
+                page.go(page.route or "/")
             page.update()
 
     layout, app_state = create_app_layout(page)

@@ -8,12 +8,20 @@ from components.navigation_drawer import create_drawer
 from components.profile_page import ProfilePage
 from components.settings import create_settings_page
 from utils.theme_utils import get_current_color_scheme
+from components.login import create_login_page
+from components.register import create_register_page
 
 logger = logging.getLogger(__name__)
 
 
 def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: dict):
     current_color_scheme = get_current_color_scheme(page)
+    
+    def logout(e):
+        page.client_storage.remove("user_id")
+        print("Usuário deslogado")
+        page.go("/login")
+        page.update()
 
     def route_change(route):
         company_data.update({
@@ -36,25 +44,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     bgcolor=current_color_scheme.background,
                     center_title=True,
                     actions=[
-                     
-                        # ft.Container(
-                        #     content=ft.Stack(
-                        #         [
-                        #             ft.CircleAvatar(
-                        #                 foreground_image_src="https://robohash.org/{username}.png",
-                        #                 content=ft.Text(user_initials),
-                        #             ),
-                        #             ft.Container(
-                        #                 content=ft.CircleAvatar(
-                        #                     bgcolor=ft.colors.GREEN, radius=5),
-                        #                 alignment=ft.alignment.bottom_left,
-                        #             ),
-                        #         ],
-                        #         width=40,
-                        #         height=40,
-                        #     ),
-                        #     tooltip=f"Logado como {username}",
-                        # ),
                         ft.PopupMenuButton(
                             icon=ft.Icons.PERSON,
                             tooltip="Perfil",
@@ -84,6 +73,11 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                     icon=ft.Icons.SETTINGS,
                                     on_click=lambda e: page.go("/settings")
                                 ),
+                                ft.PopupMenuItem(
+                                    text="Sair",
+                                    icon=ft.Icons.EXIT_TO_APP,
+                                    on_click=logout
+                                )
                             ]
                         ),
                     ]
@@ -92,12 +86,13 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
         page.views.clear()
         page.views.append(
             ft.View(
-                route="/",
-                drawer=create_drawer(page, company_data),
-                appbar=create_appbar("DebtManager"),
-                controls=[layout]
-            )
-        )
+                route="/login",
+                controls=[create_login_page(page)],
+                scroll=ft.ScrollMode.HIDDEN,
+                vertical_alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            ))
+        
 
         if page.route == "/clients":
             page.title = "Clientes"
@@ -107,9 +102,21 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     drawer=create_drawer(page, company_data),
                     appbar=create_appbar("Clientes"),
                     controls=[layout],
-                    scroll=ft.ScrollMode.HIDDEN
+                    scroll=ft.ScrollMode.HIDDEN,
                 )
             )
+        elif page.route == "/register":
+            page.title = "Registro"
+            page.views.append(
+                ft.View(
+                    route="/register",
+                    controls=[create_register_page(page)],
+                    scroll=ft.ScrollMode.HIDDEN,
+                    vertical_alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                )
+            )
+            
         elif page.route == "/dashboard":
             page.title = "Dashboard"
             page.views.append(
