@@ -12,8 +12,9 @@ load_dotenv()
 
 
 class PDFExtractor:
-    def __init__(self, pdf_path: str):
+    def __init__(self, pdf_path: str, page):
         self.pdf_path = pdf_path
+        self.page = page
         self.client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         self.MAX_TEXT_LENGTH = 10000
 

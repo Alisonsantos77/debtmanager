@@ -1,24 +1,18 @@
 import flet as ft
-import logging
-import requests
-import os
-import smtplib
-from flet.security import encrypt
-from email.mime.text import MIMEText
-from dotenv import load_dotenv
-from datetime import datetime
 from time import sleep
 import random
 import string
+from utils.supabase_utils import write_supabase
+from flet.security import encrypt
+from dotenv import load_dotenv
+import os
+import smtplib
+from email.mime.text import MIMEText
 
 load_dotenv()
-SUPABASE_KEY_USERS = os.getenv("SUPABASE_KEY_USERS")
-SUPABASE_URL_USERS = os.getenv("SUPABASE_URL_USERS")
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 SECRET_KEY = os.getenv("MY_APP_SECRET_KEY")
-headers = {"apikey": SUPABASE_KEY_USERS, "Authorization": f"Bearer {SUPABASE_KEY_USERS}", "Content-Type": "application/json"}
-logger = logging.getLogger(__name__)
 
 
 def generate_activation_code(length=6):
@@ -34,59 +28,53 @@ def send_verification_email(username, email, code):
         server.starttls()
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
-    logger.info(f"Email de verificação enviado para Alisondev77@hotmail.com para o usuário {username}")
-
-
-def show_loading(page, message="Processando..."):
-    loading_dialog = ft.AlertDialog(
-        content=ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.ProgressRing(),
-                    ft.Text(message, size=18, weight=ft.FontWeight.BOLD)
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            ),
-            alignment=ft.alignment.center,
-        ),
-        bgcolor=ft.colors.TRANSPARENT,
-        modal=True,
-        disabled=True,
-    )
-    page.open(loading_dialog)
-    page.update()
-    sleep(1)
-
-
-def show_success_and_redirect(page, route, message="Sucesso!"):
-    success_dialog = ft.AlertDialog(
-        content=ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.colors.GREEN),
-                    ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN)
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
-            ),
-            alignment=ft.alignment.center,
-        ),
-        bgcolor=ft.colors.TRANSPARENT,
-        modal=True,
-        disabled=True,
-    )
-    page.open(success_dialog)
-    page.update()
-    sleep(3)
-    page.close(success_dialog)
-    page.go(route)
 
 
 def create_register_page(page: ft.Page):
     username_field = ft.TextField(label="Usuário", width=300)
     email_field = ft.TextField(label="Email", width=300)
     error_text = ft.Text("", color=ft.Colors.RED)
+
+    def show_success_and_redirect(route, message="Sucesso!"):
+        success_dialog = ft.AlertDialog(
+            content=ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.colors.GREEN),
+                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN)
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+                alignment=ft.alignment.center,
+            ),
+            bgcolor=ft.colors.TRANSPARENT,
+            modal=True,
+            disabled=True,
+        )
+        page.open(success_dialog)
+        page.update()
+        sleep(3)
+        page.close(success_dialog)
+        page.go(route)
+
+    def show_loading():
+        loading_dialog = ft.AlertDialog(
+            content=ft.Container(
+                content=ft.ProgressRing(),
+                alignment=ft.alignment.center,
+            ),
+            bgcolor=ft.colors.TRANSPARENT,
+            modal=True,
+            disabled=True,
+        )
+        page.open(loading_dialog)
+        page.update()
+        return loading_dialog
+
+    def hide_loading(dialog):
+        page.close(dialog)
+        page.update()
 
     def register(e):
         username = username_field.value.strip()
@@ -95,7 +83,7 @@ def create_register_page(page: ft.Page):
             error_text.value = "Preencha usuário e email!"
             page.update()
             return
-        show_loading(page, "Registrando...")
+        loading_dialog = show_loading()
         activation_code = generate_activation_code()
         encrypted_code = encrypt(activation_code, SECRET_KEY)
         data = {
@@ -104,16 +92,18 @@ def create_register_page(page: ft.Page):
             "activation_code": encrypted_code,
             "status": "pendente"
         }
-        response = requests.post(f"{SUPABASE_URL_USERS}/rest/v1/users_debt", headers=headers, json=data)
-        if response.ok:
+        if write_supabase("users_debt", data):
             send_verification_email(username, email, activation_code)
+            # Salvar username e activation_code no client_storage
             page.client_storage.set("pending_username", username)
-            show_success_and_redirect(page, "/login", "Registro concluído! Código enviado ao suporte.")
+            page.client_storage.set("activation_code", activation_code)
+            page.client_storage.set("username", username)  # Salvar também como username para consistência
+            hide_loading(loading_dialog)
+            show_success_and_redirect("/login", "Registro concluído! Código enviado ao suporte.")
         else:
-            page.clean()
+            hide_loading(loading_dialog)
             render_form()
             error_text.value = "Erro ao registrar."
-            page.update()
 
     def render_form():
         page.clean()
