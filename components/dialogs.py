@@ -16,10 +16,12 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
         def open_dialog(self):
             page.overlay.append(self.dialog)
             self.dialog.open = True
+            logger.info(f"Diálogo aberto: {self.dialog.title.value}")
             page.update()
 
         def close_dialog(self):
             self.dialog.open = False
+            logger.info(f"Diálogo fechado: {self.dialog.title.value}")
             page.update()
 
     usage_dialog = CustomDialog(
@@ -38,10 +40,9 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
                 on_change=lambda e: [message_templates.set_template(e.control.value),
                                      setattr(bulk_message_input, 'value',
                                              message_templates.get_template(e.control.value)),
+                                     logger.info(f"Modelo de mensagem alterado para: {e.control.value}"),
                                      page.update()],
                 width=300,
-                # color=current_color_scheme.on_surface,
-                # label_style=ft.TextStyle(color=current_color_scheme.primary),
                 border_color=current_color_scheme.outline
             ),
             bulk_message_input
@@ -49,8 +50,7 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
         [
             ft.Row([
                 ft.TextButton("Cancelar", on_click=lambda e: bulk_send_dialog.close_dialog()),
-                ft.ElevatedButton("Enviar", bgcolor=current_color_scheme.primary,
-                                  color='white',
+                ft.ElevatedButton("Enviar", bgcolor=current_color_scheme.primary, color='white',
                                   on_click=lambda e: page.run_task(send_bulk_message))
             ], alignment=ft.MainAxisAlignment.END)
         ]
@@ -72,10 +72,9 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
                              setattr(message_input, 'value', message_templates.get_template(e.control.value) if not selected_client else message_templates.get_template(e.control.value).format(
                                  name=selected_client.name, debt_amount=selected_client.debt_amount,
                                  due_date=selected_client.due_date, reason=getattr(selected_client, 'reason', 'pendência'))),
+                             logger.info(f"Modelo de mensagem individual alterado para: {e.control.value}"),
                              page.update()],
         width=300,
-        # color=current_color_scheme.on_surface,
-        # label_style=ft.TextStyle(color=current_color_scheme.on_surface),
         border_color=current_color_scheme.outline
     )
 
