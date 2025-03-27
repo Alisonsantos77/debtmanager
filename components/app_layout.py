@@ -64,12 +64,15 @@ def create_app_layout(page: ft.Page):
     selected_client = None
     user_plan = "basic"
     usage_tracker = UsageTracker(user_plan)
-
     message_templates = MessageTemplates()
+    history = []  # Lista pra rastrear envios
 
     username = page.client_storage.get("username") or "default_user"
     user_id = fetch_user_id(username)
     logger.info(f"Usuário inicializado: {username} (ID: {user_id})")
+
+    if not page.session.contains_key("notified_clients"):
+        page.session.set("notified_clients", [])
 
     usage_display = ft.Text(
         f"Consumo: {usage_tracker.get_usage('messages_sent')}/{user_plan_limits[user_plan]['messages']} mensagens | {usage_tracker.get_usage('pdfs_processed')}/{user_plan_limits[user_plan]['pdfs']} PDFs",
@@ -220,7 +223,6 @@ def create_app_layout(page: ft.Page):
         await asyncio.sleep(1)
         success = message_manager.send_single_notification(client, message_body)
         if tile:
-            tile.bgcolor = ft.Colors.GREEN_100 if success else ft.Colors.RED_100
             tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
                                     color=ft.Colors.GREEN if success else ft.Colors.RED)
             page.update()
@@ -228,6 +230,13 @@ def create_app_layout(page: ft.Page):
             usage_tracker.increment_usage("messages_sent")
             usage_tracker.sync_with_supabase(user_id)
             last_sent = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+            history.append(type('HistoryEntry', (), {'sent_at': last_sent,
+                           'status': 'enviado', 'message': message_body, 'client': client.name})())
+            notified_clients = page.session.get("notified_clients")
+            if client.name not in notified_clients:
+                notified_clients.append(client.name)
+                page.session.set("notified_clients", notified_clients)
+            logger.info(f"Cliente {client.name} adicionado à lista de notificados")
             page.snack_bar = CustomSnackBar(
                 f"Alerta enviado para {client.name} às {last_sent}!", bgcolor=ft.Colors.GREEN)
             page.snack_bar.show(page)
@@ -253,15 +262,18 @@ def create_app_layout(page: ft.Page):
         messages_sent = usage_tracker.get_usage("messages_sent")
         messages_limit = user_plan_limits[user_plan]["messages"]
         remaining_messages = messages_limit - messages_sent
-        clients_to_send = min(len(filtered_clients), remaining_messages)
+        notified_clients = page.session.get("notified_clients")
+        eligible_clients = [c for c in filtered_clients if c.name not in notified_clients]
+        clients_to_send = min(len(eligible_clients), remaining_messages)
 
         if clients_to_send <= 0:
-            logger.info(f"Nenhuma mensagem disponível: {messages_sent}/{messages_limit}")
+            logger.info(
+                f"Nenhuma mensagem disponível ou todos os clientes já notificados: {messages_sent}/{messages_limit}")
             dialogs["usage_dialog"].open_dialog()
             return
 
         logger.info(
-            f"Iniciando envio em massa para {clients_to_send} de {len(filtered_clients)} clientes (limite restante: {remaining_messages})")
+            f"Iniciando envio em massa para {clients_to_send} de {len(eligible_clients)} clientes elegíveis (limite restante: {remaining_messages})")
         dialogs["bulk_send_feedback_dialog"].open_dialog()
         total_clients = clients_to_send
         dialogs["bulk_send_feedback"].controls.clear()
@@ -271,8 +283,7 @@ def create_app_layout(page: ft.Page):
         success_count = 0
 
         try:
-            # Limita aos primeiros clientes até o limite
-            for idx, client in enumerate(filtered_clients[:clients_to_send]):
+            for idx, client in enumerate(eligible_clients[:clients_to_send]):
                 logger.info(f"Tentando enviar para {client.name} ({client.contact})")
                 feedback_list.controls.append(
                     ft.Text(f"Enviando para {client.name} ({client.contact})...", italic=True,
@@ -289,15 +300,31 @@ def create_app_layout(page: ft.Page):
                     logger.error(f"Erro na formatação da mensagem para {client.name}: {e}")
                     message_body = f"Olá {client.name}, regularize sua pendência de {client.debt_amount} vencida em {client.due_date}."
 
+                tile = next((t for t in client_list_view.controls if isinstance(
+                    t, ClientListTile) and t.client == client), None)
+                if tile:
+                    tile.bgcolor = ft.Colors.YELLOW_100
+                    page.update()
+
                 success = message_manager.send_single_notification(client, message_body)
                 feedback_list.controls[-1] = ft.Row([
                     ft.Text(f"{client.name} ({client.contact})", color=current_color_scheme.on_surface),
                     ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
                             color=ft.Colors.GREEN if success else ft.Colors.RED)
                 ])
+                if tile:
+                    tile.bgcolor = ft.Colors.GREEN_100 if success else ft.Colors.RED_100
+                    tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
+                                            color=ft.Colors.GREEN if success else ft.Colors.RED)
+                    page.update()
+
                 if success:
                     success_count += 1
-                    logger.info(f"Sucesso no envio para {client.name}")
+                    notified_clients.append(client.name)
+                    page.session.set("notified_clients", notified_clients)
+                    history.append(type('HistoryEntry', (), {'sent_at': datetime.datetime.now().strftime(
+                        "%d/%m/%Y %H:%M"), 'status': 'enviado', 'message': message_body, 'client': client.name})())
+                    logger.info(f"Sucesso no envio para {client.name}, adicionado à lista de notificados")
                 else:
                     logger.error(f"Falha no envio para {client.name}")
 
@@ -321,10 +348,10 @@ def create_app_layout(page: ft.Page):
             usage_display.color = get_current_color_scheme(page).on_surface
             messages_view.controls = [ft.Text("Mensagens enviadas com sucesso!", size=12,
                                               color=current_color_scheme.on_surface)]
-            if len(filtered_clients) > clients_to_send:
-                logger.info(f"{len(filtered_clients) - clients_to_send} clientes não enviados devido ao limite")
+            if len(eligible_clients) > clients_to_send:
+                logger.info(f"{len(eligible_clients) - clients_to_send} clientes não enviados devido ao limite")
                 feedback_list.controls.append(
-                    ft.Text(f"Nota: {len(filtered_clients) - clients_to_send} clientes excederam o limite e não foram enviados.",
+                    ft.Text(f"Nota: {len(eligible_clients) - clients_to_send} clientes excederam o limite e não foram enviados.",
                             color=current_color_scheme.on_surface)
                 )
         except Exception as e:
@@ -456,4 +483,4 @@ def create_app_layout(page: ft.Page):
         create_clients_page(clients_list, filtered_clients, current_page, client_list_view,
                             messages_view, last_sent, dialogs, page, update_client_list)
     ], expand=True, alignment=ft.MainAxisAlignment.CENTER)
-    return layout, {"toggle_theme": toggle_theme, "dialogs": dialogs, "user_plan": user_plan, "clients_list": clients_list, "filtered_clients": filtered_clients, "update_client_list": update_client_list, "usage_tracker": usage_tracker}
+    return layout, {"toggle_theme": toggle_theme, "dialogs": dialogs, "user_plan": user_plan, "clients_list": clients_list, "filtered_clients": filtered_clients, "update_client_list": update_client_list, "usage_tracker": usage_tracker, "history": history}

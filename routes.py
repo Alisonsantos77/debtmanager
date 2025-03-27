@@ -5,6 +5,7 @@ from components.dashboard import create_dashboard_page
 from components.navigation_drawer import create_drawer
 from components.profile_page import ProfilePage
 from components.settings import create_settings_page
+from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
 from components.login import create_login_page
 from components.register import create_register_page
@@ -120,12 +121,13 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
 
         elif page.route == "/dashboard":
             page.title = "Dashboard"
+            history = get_client_history(None)
             page.views.append(
                 ft.View(
                     route="/dashboard",
                     drawer=create_drawer(page, company_data),
                     appbar=create_appbar("Dashboard"),
-                    controls=[create_dashboard_page(layout_data["clients_list"], page)],
+                    controls=[create_dashboard_page(layout_data["clients_list"], layout_data["history"], page)],
                     scroll=ft.ScrollMode.HIDDEN
                 )
             )

@@ -1,7 +1,7 @@
 import flet as ft
 from typing import List
 from models.pending_client import PendingClient
-from charts import create_pie_chart, create_line_chart, create_bar_chart
+from charts import create_charts_container
 from utils.database import get_client_history
 
 
@@ -17,11 +17,7 @@ def create_client_details_page(
         return ft.Text("Cliente não encontrado.", size=16)
 
     history = get_client_history(client.name)
-    pie_chart = create_pie_chart(history, page)
-    line_chart = create_line_chart(
-        client.debt_amount, page) if user_plan == "premium" else None
-    bar_chart = create_bar_chart(
-        history, page) if user_plan == "premium" else None
+    charts_container = create_charts_container(clients_list, history, page)
     details_controls = [
         ft.Text(f"Nome: {client.name}", size=16,
                 color=page.theme.color_scheme.on_surface),
@@ -42,20 +38,10 @@ def create_client_details_page(
     else:
         details_controls.append(ft.Text(
             "Atualize para o plano Premium para ver mais detalhes!", size=14, color=page.theme.color_scheme.error))
-    details_controls.extend([
-        ft.Text("Taxa de Sucesso dos Avisos", size=18, weight='bold',
-                color=page.theme.color_scheme.on_surface),
-        ft.Container(pie_chart, padding=10, border_radius=5),
-    ])
-    if user_plan == "premium":
-        details_controls.extend([
-            ft.Text("Evolução do Valor Pendente (Simulado)", size=18,
-                    weight='bold', color=page.theme.color_scheme.on_surface),
-            ft.Container(line_chart, padding=10, border_radius=5),
-            ft.Text("Frequência de Avisos por Mês", size=18,
-                    weight='bold', color=page.theme.color_scheme.on_surface),
-            ft.Container(bar_chart, padding=10, border_radius=5),
-        ])
+
+    details_controls.append(ft.Text("Gráficos de Análise", size=18, weight='bold',
+                                    color=page.theme.color_scheme.on_surface))
+    details_controls.append(charts_container)
 
     return ft.Column(
         controls=details_controls,

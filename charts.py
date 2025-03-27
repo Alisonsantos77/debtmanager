@@ -1,312 +1,281 @@
 import flet as ft
+import logging
 from datetime import datetime
-from typing import List
-from models.pending_client import PendingClient
-from utils.theme_utils import get_current_color_scheme
+import asyncio
+
+logger = logging.getLogger(__name__)
 
 
-def create_pie_chart(history, page: ft.Page):
-    
-    current_color_scheme = get_current_color_scheme(page)
-    
-    success_count = sum(1 for h in history if h.status.lower() == "enviado")
-    failure_count = len(history) - success_count
-    normal_radius = 120
-    hover_radius = 130
-    normal_title_style = ft.TextStyle(
-        size=14, color=current_color_scheme.on_surface, weight=ft.FontWeight.BOLD
-    )
-    hover_title_style = ft.TextStyle(
-        size=16,
-        color=current_color_scheme.on_surface,
-        weight=ft.FontWeight.BOLD,
-        shadow=ft.BoxShadow(blur_radius=2, color=ft.Colors.BLACK54),
-    )
-    normal_badge_size = 40
-    hover_badge_size = 50
+class ChartWithDateFilter(ft.Column):
+    def __init__(self, clients_list, history, page: ft.Page):
+        super().__init__(expand=True, alignment=ft.MainAxisAlignment.START, scroll=ft.ScrollMode.AUTO)
+        self.clients_list = clients_list
+        self.history = history
+        self.page = page
+        self.start_date_picker = ft.DatePicker(
+            first_date=datetime(2023, 1, 1),
+            last_date=datetime(2025, 12, 31),
+            on_change=self.update_charts,
+        )
+        self.end_date_picker = ft.DatePicker(
+            first_date=datetime(2023, 1, 1),
+            last_date=datetime(2025, 12, 31),
+            on_change=self.update_charts,
+        )
+        self.page.overlay.extend([self.start_date_picker, self.end_date_picker])
 
-    def badge(icon, size):
-        return ft.Container(
-            ft.Icon(icon, color=current_color_scheme.on_surface),
-            width=size,
-            height=size,
-            border=ft.border.all(1, current_color_scheme.outline),
-            border_radius=size / 2,
-            bgcolor=current_color_scheme.primary_container,
+        self.controls = self.build_controls()
+
+    async def redirect_after_snackbar(self):
+        await asyncio.sleep(3)  
+        self.page.go("/clients")
+        self.page.update()
+
+    def build_controls(self):
+        if not self.clients_list and not self.history:
+            logger.info("Nenhum dado disponível para gráficos")
+            snack = ft.SnackBar(
+                content=ft.Text("Carregue um relatório em /clients para ver os gráficos"),
+                bgcolor=ft.colors.BLUE_GREY,
+                duration=3000, 
+            )
+            self.page.overlay.append(snack)
+            snack.open = True
+            self.page.update()
+            # Inicia a tarefa assíncrona pra redirecionar
+            self.page.run_task(self.redirect_after_snackbar)
+            return [
+                ft.Text(
+                    "Nenhum relatório carregado",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                    color=self.page.theme.color_scheme.primary,
+                    text_align=ft.TextAlign.CENTER
+                )
+            ]
+
+        return [
+            ft.Row([
+                ft.ElevatedButton("Data Inicial", icon=ft.Icons.CALENDAR_TODAY,
+                                  on_click=lambda e: self.page.open(self.start_date_picker)),
+                ft.ElevatedButton("Data Final", icon=ft.Icons.CALENDAR_TODAY,
+                                  on_click=lambda e: self.page.open(self.end_date_picker)),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+            ft.ResponsiveRow([
+                ft.Column(
+                    col={"md": 6},
+                    controls=[
+                        ft.Text("Status de Envios", size=18, weight=ft.FontWeight.BOLD,
+                                color=self.page.theme.color_scheme.primary),
+                        ft.Container(self.create_pie_chart(), padding=20, width=500, height=400)
+                    ]
+                ),
+                ft.Column(
+                    col={"md": 6},
+                    controls=[
+                        ft.Text("Dívidas por Mês", size=18, weight=ft.FontWeight.BOLD,
+                                color=self.page.theme.color_scheme.primary),
+                        ft.Container(self.create_bar_chart(), padding=20, width=500, height=400)
+                    ]
+                ),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
+            ft.ResponsiveRow([
+                ft.Column(
+                    col=12,
+                    controls=[
+                        ft.Text("Taxa de Sucesso ao Longo do Tempo", size=18, weight=ft.FontWeight.BOLD,
+                                color=self.page.theme.color_scheme.primary),
+                        ft.Container(self.create_line_chart(), padding=20, width=1000, height=400)
+                    ]
+                ),
+            ], alignment=ft.MainAxisAlignment.CENTER),
+        ]
+
+    def filter_data(self):
+        start_date = self.start_date_picker.value or datetime(2023, 1, 1)
+        end_date = self.end_date_picker.value or datetime(2025, 12, 31)
+        filtered_clients = [
+            c for c in self.clients_list
+            if start_date <= datetime.strptime(c.due_date, "%d/%m/%Y") <= end_date
+        ]
+        filtered_history = [
+            h for h in self.history
+            if start_date <= datetime.strptime(h.sent_at.split()[0], "%d/%m/%Y") <= end_date
+        ]
+        logger.info(
+            f"Dados filtrados: {len(filtered_clients)} clientes, {len(filtered_history)} históricos entre {start_date} e {end_date}")
+        return filtered_clients, filtered_history
+
+    def update_charts(self, e):
+        filtered_clients, filtered_history = self.filter_data()
+        if not filtered_clients and not filtered_history:
+            self.controls = [
+                ft.Text(
+                    "Nenhum dado no período selecionado",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                    color=self.page.theme.color_scheme.primary,
+                    text_align=ft.TextAlign.CENTER
+                )
+            ]
+        else:
+            self.controls = [
+                ft.Row([
+                    ft.ElevatedButton("Data Inicial", icon=ft.Icons.CALENDAR_TODAY,
+                                      on_click=lambda e: self.page.open(self.start_date_picker)),
+                    ft.ElevatedButton("Data Final", icon=ft.Icons.CALENDAR_TODAY,
+                                      on_click=lambda e: self.page.open(self.end_date_picker)),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+                ft.ResponsiveRow([
+                    ft.Column(
+                        col={"md": 6},
+                        controls=[
+                            ft.Text("Status de Envios", size=18, weight=ft.FontWeight.BOLD,
+                                    color=self.page.theme.color_scheme.primary),
+                            ft.Container(self.create_pie_chart(filtered_history), padding=20, width=500, height=400)
+                        ]
+                    ),
+                    ft.Column(
+                        col={"md": 6},
+                        controls=[
+                            ft.Text("Dívidas por Mês", size=18, weight=ft.FontWeight.BOLD,
+                                    color=self.page.theme.color_scheme.primary),
+                            ft.Container(self.create_bar_chart(filtered_clients), padding=20, width=500, height=400)
+                        ]
+                    ),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
+                ft.ResponsiveRow([
+                    ft.Column(
+                        col=12,
+                        controls=[
+                            ft.Text("Taxa de Sucesso ao Longo do Tempo", size=18, weight=ft.FontWeight.BOLD,
+                                    color=self.page.theme.color_scheme.primary),
+                            ft.Container(self.create_line_chart(filtered_history), padding=20, width=1000, height=400)
+                        ]
+                    ),
+                ], alignment=ft.MainAxisAlignment.CENTER),
+            ]
+        self.page.update()
+
+    def create_pie_chart(self, history=None):
+        history = history or self.history
+        current_color_scheme = self.page.theme.color_scheme
+        success_count = sum(1 for h in history if h.status == "enviado")
+        failure_count = len(history) - success_count
+
+        logger.info(f"Gerando gráfico de pizza: {success_count} sucessos, {failure_count} falhas")
+
+        return ft.PieChart(
+            sections=[
+                ft.PieChartSection(
+                    value=success_count if success_count > 0 else 1,
+                    title=f"Sucesso ({success_count})",
+                    color=current_color_scheme.primary,
+                    radius=150
+                ),
+                ft.PieChartSection(
+                    value=failure_count if failure_count > 0 else 1,
+                    title=f"Falha ({failure_count})",
+                    color=current_color_scheme.error,
+                    radius=150
+                )
+            ],
+            center_space_radius=50,
+            sections_space=5,
+            expand=True
         )
 
-    def on_chart_event(e: ft.PieChartEvent):
-        for idx, section in enumerate(chart.sections):
-            if idx == e.section_index:
-                section.radius = hover_radius
-                section.title_style = hover_title_style
-            else:
-                section.radius = normal_radius
-                section.title_style = normal_title_style
-        chart.update()
+    def create_bar_chart(self, clients_list=None):
+        clients_list = clients_list or self.clients_list
+        current_color_scheme = self.page.theme.color_scheme
+        debt_by_month = {}
 
-    chart = ft.PieChart(
-        sections=[
-            ft.PieChartSection(
-                value=success_count,
-                color=current_color_scheme.primary,
-                radius=normal_radius,
-                title=f"Sucesso: {success_count}",
-                title_style=normal_title_style,
-                badge=badge(ft.Icons.CHECK_CIRCLE, normal_badge_size),
-                badge_position=0.95,
-            ),
-            ft.PieChartSection(
-                value=failure_count,
-                color=ft.Colors.RED,
-                radius=normal_radius,
-                title=f"Falha: {failure_count}",
-                title_style=normal_title_style,
-                badge=badge(ft.Icons.ERROR, normal_badge_size),
-                badge_position=0.95,
-            )
-        ],
-        sections_space=4,
-        center_space_radius=50,
-        width=350,
-        height=350,
-        animate=500,
-        on_chart_event=on_chart_event,
-    )
+        for client in clients_list:
+            due_date = datetime.strptime(client.due_date, "%d/%m/%Y")
+            month_key = due_date.strftime("%Y-%m")
+            debt_value = float(client.debt_amount.replace("R$ ", "").replace(",", "."))
+            debt_by_month[month_key] = debt_by_month.get(month_key, 0) + debt_value
 
-    return ft.Container(
-        content=chart,
-        bgcolor=current_color_scheme.surface,
-        border=ft.border.all(1, current_color_scheme.outline),
-        padding=10,
-        border_radius=10,
-    )
+        logger.info(f"Gerando gráfico de barras: {debt_by_month}")
 
+        if not debt_by_month:
+            debt_by_month["Sem Dados"] = 0
 
-def create_line_chart(debt_amount: str, page: ft.Page):
-    current_color_scheme = get_current_color_scheme(page)
-    debt_value = float(debt_amount.replace("R$", "").replace(".", "").replace(",", ".").strip())
-    simulated_values = [debt_value * (1 - i * 0.1) for i in range(6)]
-
-    text_color = current_color_scheme.on_surface
-    tooltip_bgcolor = ft.Colors.with_opacity(0.9, current_color_scheme.primary_container)
-
-    return ft.LineChart(
-        data_series=[
-            ft.LineChartData(
-                data_points=[
-                    ft.LineChartDataPoint(x=i, y=simulated_values[i], tooltip=f"Mês {i+1}: R${simulated_values[i]:.2f}")
-                    for i in range(len(simulated_values))
-                ],
-                stroke_width=4,
-                color=current_color_scheme.primary,
-                curved=True,
-                stroke_cap_round=True
-            )
-        ],
-        border=ft.border.all(2, current_color_scheme.outline),
-        horizontal_grid_lines=ft.ChartGridLines(color=ft.Colors.GREY_300, width=1, dash_pattern=[3, 3]),
-        bottom_axis=ft.ChartAxis(
-            title=ft.Text("Meses", color=text_color, size=14),
-            labels=[
-                ft.ChartAxisLabel(value=i, label=ft.Text(f"Mês {i+1}", size=12, color=text_color))
-                for i in range(len(simulated_values))
-            ],
-            labels_size=40
-        ),
-        left_axis=ft.ChartAxis(
-            title=ft.Text("Valor (R$)", color=text_color, size=14),
-            labels=[
-                ft.ChartAxisLabel(value=simulated_values[i], label=ft.Text(
-                    f"R${simulated_values[i]:.0f}", size=12, color=text_color))
-                for i in range(len(simulated_values))
-            ],
-            labels_size=40
-        ),
-        tooltip_bgcolor=tooltip_bgcolor,
-        min_y=min(simulated_values) * 0.9,
-        max_y=max(simulated_values) * 1.1,
-        width=450,
-        height=350,
-        interactive=True,
-        animate=1000,
-        bgcolor=current_color_scheme.surface
-    )
-
-
-def create_bar_chart(history, page: ft.Page):
-    current_color_scheme = get_current_color_scheme(page)
-
-    monthly_counts = {}
-    for h in history:
-        sent_at = datetime.strptime(h.sent_at, "%d/%m/%Y %H:%M")
-        month = sent_at.strftime("%b %Y")
-        monthly_counts[month] = monthly_counts.get(month, 0) + 1
-
-    labels = list(monthly_counts.keys())
-    values = list(monthly_counts.values())
-
-    display_labels = []
-    for i in range(len(labels)):
-        if i % 5 == 0:
-            display_labels.append(
-                ft.ChartAxisLabel(
-                    value=i,
-                    label=ft.Text(labels[i], size=12, color=current_color_scheme.on_surface, rotate=45)
+        return ft.BarChart(
+            bar_groups=[
+                ft.BarChartGroup(
+                    x=i,
+                    bar_rods=[
+                        ft.BarChartRod(
+                            from_y=0,
+                            to_y=value,
+                            width=40,
+                            color=current_color_scheme.primary,
+                            tooltip=f"{month}: R$ {value:,.2f}".replace(".", ","),
+                            border_radius=5
+                        )
+                    ]
                 )
-            )
-        else:
-            display_labels.append(
-                ft.ChartAxisLabel(value=i, label=ft.Text(""))
-            )
-
-    text_color = current_color_scheme.on_surface
-    tooltip_bgcolor = ft.Colors.with_opacity(0.9, current_color_scheme.primary_container)
-
-    return ft.BarChart(
-        bar_groups=[
-            ft.BarChartGroup(
-                x=i,
-                bar_rods=[
-                    ft.BarChartRod(
-                        from_y=0,
-                        to_y=values[i],
-                        width=25,
-                        color=current_color_scheme.primary,
-                        border_radius=5,
-                        tooltip=f"{labels[i]}: {values[i]} avisos"
-                    )
-                ]
-            )
-            for i in range(len(values))
-        ],
-        border=ft.border.all(2, current_color_scheme.outline),
-        horizontal_grid_lines=ft.ChartGridLines(color=ft.Colors.GREY_300, width=1, dash_pattern=[3, 3]),
-        bottom_axis=ft.ChartAxis(
-            title=ft.Text("Meses", color=text_color, size=14),
-            labels=display_labels,
-            labels_size=50
-        ),
-        left_axis=ft.ChartAxis(
-            title=ft.Text("Nº de Avisos", color=text_color, size=14),
-            labels=[
-                ft.ChartAxisLabel(value=i, label=ft.Text(str(i), size=12, color=text_color))
-                for i in range(int(max(values) + 1))
+                for i, (month, value) in enumerate(debt_by_month.items())
             ],
-            labels_size=40
-        ),
-        tooltip_bgcolor=tooltip_bgcolor,
-        min_y=0,
-        max_y=max(values) + 1 if values else 1,
-        width=600,
-        height=350,
-        interactive=True,
-        animate=1000,
-        bgcolor=current_color_scheme.surface
-    )
-
-
-def create_conversion_chart(history, page: ft.Page):
-    current_color_scheme = get_current_color_scheme(page)
-
-    converted_count = sum(1 for h in history if hasattr(h, 'converted') and h.converted)
-    not_converted_count = len(history) - converted_count
-
-    text_color = current_color_scheme.on_surface
-
-    chart = ft.PieChart(
-        sections=[
-            ft.PieChartSection(
-                value=converted_count,
-                color=current_color_scheme.primary,
-                radius=120,
-                title=f"Convertidos: {converted_count}",
-                title_style=ft.TextStyle(color=text_color, size=14, weight=ft.FontWeight.BOLD)
+            bottom_axis=ft.ChartAxis(
+                labels=[ft.ChartAxisLabel(value=i, label=ft.Text(month, size=14))
+                        for i, month in enumerate(debt_by_month.keys())],
+                labels_size=50
             ),
-            ft.PieChartSection(
-                value=not_converted_count,
-                color=ft.Colors.RED,
-                radius=120,
-                title=f"Não Convertidos: {not_converted_count}",
-                title_style=ft.TextStyle(color=text_color, size=14, weight=ft.FontWeight.BOLD)
-            )
-        ],
-        sections_space=4,
-        center_space_radius=50,
-        width=350,
-        height=350,
-        animate=500,
-    )
+            left_axis=ft.ChartAxis(
+                labels_size=50,
+                title=ft.Text("Valor (R$)", size=16)
+            ),
+            tooltip_bgcolor=ft.colors.with_opacity(0.8, current_color_scheme.surface_variant),
+            max_y=max(debt_by_month.values(), default=100) * 1.2,
+            expand=True
+        )
 
-    return ft.Container(
-        content=chart,
-        bgcolor=current_color_scheme.surface,
-        border=ft.border.all(1, current_color_scheme.outline),
-        padding=10,
-        border_radius=10,
-    )
+    def create_line_chart(self, history=None):
+        history = history or self.history
+        current_color_scheme = self.page.theme.color_scheme
+        success_data = []
+        dates = sorted(set(h.sent_at.split()[0] for h in history))
 
-
-def create_segment_analysis_chart(clients: List[PendingClient], page: ft.Page):
-    current_color_scheme = get_current_color_scheme(page)
-
-    segments = {"< R$1.000": 0, "R$1.000 - R$5.000": 0, "> R$5.000": 0}
-    for client in clients:
-        debt = float(client.debt_amount.replace("R$", "").replace(".", "").replace(",", ".").strip())
-        if debt < 1000:
-            segments["< R$1.000"] += 1
-        elif 1000 <= debt <= 5000:
-            segments["R$1.000 - R$5.000"] += 1
+        if not dates:
+            dates = [datetime.now().strftime("%d/%m/%Y")]
+            success_data = [(dates[0], 0)]
         else:
-            segments["> R$5.000"] += 1
+            for date in dates:
+                daily_success = sum(1 for h in history if h.sent_at.startswith(date) and h.status == "enviado")
+                daily_total = sum(1 for h in history if h.sent_at.startswith(date))
+                success_rate = (daily_success / daily_total * 100) if daily_total > 0 else 0
+                success_data.append((date, success_rate))
 
-    labels = list(segments.keys())
-    values = list(segments.values())
+        logger.info(f"Gerando gráfico de linha: {success_data}")
 
-    text_color = current_color_scheme.on_surface
-    tooltip_bgcolor = ft.Colors.with_opacity(0.9, current_color_scheme.primary_container)
-
-    return ft.BarChart(
-        bar_groups=[
-            ft.BarChartGroup(
-                x=i,
-                bar_rods=[
-                    ft.BarChartRod(
-                        from_y=0,
-                        to_y=values[i],
-                        width=25,
-                        color=current_color_scheme.primary,
-                        border_radius=5,
-                        tooltip=f"{labels[i]}: {values[i]} clientes"
-                    )
-                ]
-            )
-            for i in range(len(values))
-        ],
-        border=ft.border.all(2, current_color_scheme.outline),
-        horizontal_grid_lines=ft.ChartGridLines(color=ft.Colors.GREY_300, width=1, dash_pattern=[3, 3]),
-        bottom_axis=ft.ChartAxis(
-            title=ft.Text("Segmentos", color=text_color, size=14),
-            labels=[
-                ft.ChartAxisLabel(value=i, label=ft.Text(labels[i], size=12, color=text_color))
-                for i in range(len(labels))
+        return ft.LineChart(
+            data_series=[
+                ft.LineChartData(
+                    data_points=[
+                        ft.LineChartDataPoint(i, value)
+                        for i, (date, value) in enumerate(success_data)
+                    ],
+                    color=current_color_scheme.primary,
+                    stroke_width=3,
+                    curved=True
+                )
             ],
-            labels_size=40
-        ),
-        left_axis=ft.ChartAxis(
-            title=ft.Text("Nº de Clientes", color=text_color, size=14),
-            labels=[
-                ft.ChartAxisLabel(value=i, label=ft.Text(str(i), size=12, color=text_color))
-                for i in range(int(max(values) + 1))
-            ],
-            labels_size=40
-        ),
-        tooltip_bgcolor=tooltip_bgcolor,
-        min_y=0,
-        max_y=max(values) + 1 if values else 1,
-        width=450,
-        height=350,
-        interactive=True,
-        animate=1000,
-        bgcolor=current_color_scheme.surface
-    )
+            bottom_axis=ft.ChartAxis(
+                labels=[ft.ChartAxisLabel(value=i, label=ft.Text(date, size=14))
+                        for i, (date, _) in enumerate(success_data)],
+                labels_size=50
+            ),
+            left_axis=ft.ChartAxis(
+                labels=[ft.ChartAxisLabel(value=i, label=ft.Text(f"{i}%", size=14)) for i in range(0, 101, 25)],
+                labels_size=50,
+                title=ft.Text("Taxa (%)", size=16)
+            ),
+            tooltip_bgcolor=ft.colors.with_opacity(0.8, current_color_scheme.surface_variant),
+            expand=True
+        )
+
+
+def create_charts_container(clients_list, history, page: ft.Page):
+    return ChartWithDateFilter(clients_list, history, page)
