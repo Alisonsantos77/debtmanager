@@ -51,7 +51,10 @@ def write_supabase(endpoint: str, data: dict, method="post") -> bool:
 def fetch_user_id(username: str) -> str:
     logger.info(f"Buscando user_id para username: {username}")
     data = read_supabase("users_debt", f"?username=eq.{username}")
-    user_id = data.get("id", "default_user_id") if data else "default_user_id"
+    user_id = data.get("id") if data else None
+    if not user_id:
+        logger.error(f"User_id não encontrado para username: {username}")
+        return None
     logger.info(f"User_id retornado: {user_id}")
     return user_id
 

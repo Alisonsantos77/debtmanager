@@ -1,32 +1,38 @@
+import logging
+from utils.supabase_utils import write_supabase
+
+logger = logging.getLogger(__name__)
+
+
 class UsageTracker:
     def __init__(self, user_plan, user_id):
-        from utils.supabase_utils import read_supabase
         self.user_plan = user_plan
-        user_data = read_supabase("users_debt", f"?id=eq.{user_id}")
-        self.usage = {
-            "messages_sent": user_data.get("messages_sent", 0),
-            "pdfs_processed": user_data.get("pdfs_processed", 0)
-        }
-        plan_data = read_supabase("plans", f"?name=eq.{user_plan}")
-        self.limits = {user_plan: {"messages": plan_data["message_limit"], "pdfs": plan_data["pdf_limit"]}}
+        self.user_id = user_id
+        self.usage = {"messages_sent": 0, "pdfs_processed": 0}
 
-    def check_usage_limits(self, action, count=1):
-        if action == "message":
-            return self.usage["messages_sent"] + count <= self.limits[self.user_plan]["messages"]
-        elif action == "pdf":
-            return self.usage["pdfs_processed"] + count <= self.limits[self.user_plan]["pdfs"]
-        return False
+    def increment_usage(self, key, amount=1):
+        self.usage[key] += amount
 
-    def increment_usage(self, action, count=1):
-        if action == "messages_sent":
-            self.usage["messages_sent"] += count
-        elif action == "pdfs_processed":
-            self.usage["pdfs_processed"] += count
+    def check_usage_limits(self, key):
+        limits = {"message": 100, "pdf": 5}
+        return self.usage[f"{key}s_sent" if key == "message" else f"{key}s_processed"] < limits[key]
 
-    def get_usage(self, action):
-        return self.usage[action]
+    def get_usage(self, key):
+        return self.usage[key]
 
     def sync_with_supabase(self, user_id):
-        from utils.supabase_utils import update_usage_data
-        success = update_usage_data(user_id, self.usage["messages_sent"], self.usage["pdfs_processed"])
-        return success
+        if not user_id or user_id == "default_user_id":
+            logger.error(f"ID de usuário inválido: {user_id}")
+            return False
+        data = {"messages_sent": self.usage["messages_sent"], "pdfs_processed": self.usage["pdfs_processed"]}
+        try:
+            response = write_supabase(f"users_debt?id=eq.{user_id}", data, method="patch")
+            if response:
+                logger.info(f"Uso sincronizado para user_id {user_id}: {data}")
+                return True
+            else:
+                logger.error(f"Falha ao sincronizar uso para user_id {user_id}: resposta vazia")
+                return False
+        except Exception as e:
+            logger.error(f"Erro ao sincronizar com Supabase para user_id {user_id}: {e}")
+            return False

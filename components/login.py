@@ -1,9 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from time import sleep
-
 import flet as ft
-
-from utils.supabase_utils import update_user_status, validate_user
+from utils.supabase_utils import validate_user, update_user_status
 
 
 def create_login_page(page: ft.Page):
@@ -33,7 +31,7 @@ def create_login_page(page: ft.Page):
         )
         page.open(success_dialog)
         page.update()
-        sleep(3)
+        sleep(1)
         page.close(success_dialog)
         page.go(route)
 
@@ -56,16 +54,13 @@ def create_login_page(page: ft.Page):
         )
         page.open(success_dialog)
         page.update()
-        sleep(3)
+        sleep(1)
         page.close(success_dialog)
         page.go(route)
 
     def show_loading():
         loading_dialog = ft.AlertDialog(
-            content=ft.Container(
-                content=ft.ProgressRing(),
-                alignment=ft.alignment.center,
-            ),
+            content=ft.Container(content=ft.ProgressRing(), alignment=ft.alignment.center),
             bgcolor=ft.colors.TRANSPARENT,
             modal=True,
             disabled=True,
@@ -124,10 +119,13 @@ def create_login_page(page: ft.Page):
             update_user_status(username, "ativo", {"data_expiracao": (now + timedelta(days=30)).isoformat()})
             page.client_storage.set("username", username)
             page.client_storage.set("user_id", user["id"])
+            page.client_storage.set("activation_code", code)
             hide_loading(loading_dialog)
             show_success_and_redirect("/clients", "Bem-vindo!")
-            show_login_form()
         elif status == "ativo" and user:
+            page.client_storage.set("username", username)
+            page.client_storage.set("user_id", user["id"])
+            page.client_storage.set("activation_code", code)
             hide_loading(loading_dialog)
             show_success_and_redirect("/clients", "Bem-vindo!")
         elif status == "inativo" and user:
@@ -153,46 +151,39 @@ def create_login_page(page: ft.Page):
             update_user_status(username, "ativo", {"last_login": now.isoformat()})
             page.client_storage.set("username", username)
             page.client_storage.set("user_id", user["id"])
+            page.client_storage.set("activation_code", code)
             hide_loading(loading_dialog)
             show_success_and_redirect("/clients", "Login concluído!")
         elif status == "inativo" and user:
             hide_loading(loading_dialog)
-            page.show_snack_bar(ft.SnackBar(
-                ft.Text("Sua conta expirou. Entre em contato para reativar."),
-                bgcolor=ft.colors.RED_400,
-                duration=5000  # 5 segundos
-            ))
+            page.show_snack_bar(ft.SnackBar(ft.Text("Sua conta expirou. Entre em contato para reativar."),
+                                bgcolor=ft.colors.RED_400, duration=5000))
             render_form()
         else:
             hide_loading(loading_dialog)
-            render_form()
             status_text.value = "Código inválido, expirado ou usuário inativo."
+            render_form()
 
     activate_button.on_click = activate
     login_button.on_click = login
 
-    # Verificar status inicial do usuário
-    pending_username = page.client_storage.get("pending_username")
     saved_username = page.client_storage.get("username")
     saved_code = page.client_storage.get("activation_code")
     if saved_username and saved_code:
-        status, _ = validate_user(saved_username, saved_code)
-        if status == "ativo":
-            show_login_form()
+        status, user = validate_user(saved_username, saved_code)
+        if status == "ativo" and user:
+            page.client_storage.set("username", saved_username)
+            page.client_storage.set("user_id", user["id"])
+            page.client_storage.set("activation_code", saved_code)
+            page.go("/clients")
+            return ft.Container()
         elif status == "inativo":
-            page.show_snack_bar(ft.SnackBar(
-                ft.Text("Sua conta expirou. Entre em contato para reativar."),
-                bgcolor=ft.colors.RED_400,
-                duration=5000
-            ))
+            page.show_snack_bar(ft.SnackBar(ft.Text("Sua conta expirou. Entre em contato para reativar."),
+                                bgcolor=ft.colors.RED_400, duration=5000))
             render_form()
         else:
             render_form()
-    elif pending_username:
-        username_field.value = pending_username
-        render_form()
     else:
-        username_field.value = saved_username or ""
         render_form()
 
     return ft.Column(
