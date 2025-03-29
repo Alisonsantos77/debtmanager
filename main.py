@@ -1,11 +1,13 @@
 import logging
+import os
+import time
+from datetime import datetime, timezone
+
 import flet as ft
+import requests
+
 from components.app_layout import create_app_layout
 from routes import setup_routes
-from datetime import datetime, timezone
-import time
-import requests
-import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +20,7 @@ SUPABASE_KEY_USERS = os.getenv("SUPABASE_KEY_USERS")
 SUPABASE_URL_USERS = os.getenv("SUPABASE_URL_USERS")
 headers = {"apikey": SUPABASE_KEY_USERS, "Authorization": f"Bearer {SUPABASE_KEY_USERS}"}
 
+
 def verificar_status_usuario(page):
     retries = 5
     delay = 5
@@ -29,7 +32,7 @@ def verificar_status_usuario(page):
                 return
             cached_status = page.client_storage.get("user_status")
             last_checked = page.client_storage.get("last_checked") or 0
-            if cached_status and time.time() - last_checked < 600:
+            if cached_status and time.time() - last_checked < 60:  # alterei para 60 segundos
                 if cached_status == "inativo":
                     page.client_storage.clear()
                     page.go("/login")
@@ -47,9 +50,12 @@ def verificar_status_usuario(page):
             time.sleep(min(delay, max_delay))
             delay *= 2
 
+
 def main(page: ft.Page):
-    cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF", "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}
-    cores_dark = {"primary": "#60A5FA", "on_primary": "#1E3A8A", "primary_container": "#1E3A8A", "on_surface": "#FFFFFF", "surface": "#111827"}
+    cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF",
+                   "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}
+    cores_dark = {"primary": "#60A5FA", "on_primary": "#1E3A8A",
+                  "primary_container": "#1E3A8A", "on_surface": "#FFFFFF", "surface": "#111827"}
     page.theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_light))
     page.dark_theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_dark))
     theme_mode = page.client_storage.get("theme_mode") or "DARK"
@@ -85,6 +91,7 @@ def main(page: ft.Page):
         page.go("/login")
 
     page.update()
+
 
 if __name__ == "__main__":
     os.environ["FLET_LOG_LEVEL"] = "info"

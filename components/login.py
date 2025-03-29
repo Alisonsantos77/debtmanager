@@ -1,7 +1,9 @@
-import flet as ft
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
-from utils.supabase_utils import validate_user, update_user_status
+
+import flet as ft
+
+from utils.supabase_utils import update_user_status, validate_user
 
 
 def create_login_page(page: ft.Page):
@@ -19,6 +21,29 @@ def create_login_page(page: ft.Page):
                     controls=[
                         ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.colors.GREEN),
                         ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN)
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+                alignment=ft.alignment.center,
+            ),
+            bgcolor=ft.colors.TRANSPARENT,
+            modal=True,
+            disabled=True,
+        )
+        page.open(success_dialog)
+        page.update()
+        sleep(3)
+        page.close(success_dialog)
+        page.go(route)
+
+    def show_error_and_redirect(route, message="Falha!"):
+        success_dialog = ft.AlertDialog(
+            content=ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Icon(ft.icons.ERROR, size=50, color=ft.colors.RED),
+                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.RED)
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -101,15 +126,18 @@ def create_login_page(page: ft.Page):
             page.client_storage.set("user_id", user["id"])
             hide_loading(loading_dialog)
             show_success_and_redirect("/clients", "Bem-vindo!")
-            show_login_form()  # Após ativação, mudar para botão "ACESSA"
+            show_login_form()
         elif status == "ativo" and user:
             hide_loading(loading_dialog)
-            show_login_form()  # Se já ativo, exibir "ACESSA"
-            status_text.value = "Usuário já ativado. Use 'ACESSA'."
+            show_success_and_redirect("/clients", "Bem-vindo!")
+        elif status == "inativo" and user:
+            hide_loading(loading_dialog)
+            show_error_and_redirect("/register", "Solicite um novo registro")
+            render_form()
         else:
             hide_loading(loading_dialog)
-            render_form()
             status_text.value = "Código inválido."
+            render_form()
 
     def login(e):
         username = username_field.value.strip()
@@ -127,6 +155,14 @@ def create_login_page(page: ft.Page):
             page.client_storage.set("user_id", user["id"])
             hide_loading(loading_dialog)
             show_success_and_redirect("/clients", "Login concluído!")
+        elif status == "inativo" and user:
+            hide_loading(loading_dialog)
+            page.show_snack_bar(ft.SnackBar(
+                ft.Text("Sua conta expirou. Entre em contato para reativar."),
+                bgcolor=ft.colors.RED_400,
+                duration=5000  # 5 segundos
+            ))
+            render_form()
         else:
             hide_loading(loading_dialog)
             render_form()
@@ -138,13 +174,20 @@ def create_login_page(page: ft.Page):
     # Verificar status inicial do usuário
     pending_username = page.client_storage.get("pending_username")
     saved_username = page.client_storage.get("username")
-    saved_code = page.client_storage.get("activation_code")  # Assumindo que o código pode estar salvo
+    saved_code = page.client_storage.get("activation_code")
     if saved_username and saved_code:
         status, _ = validate_user(saved_username, saved_code)
         if status == "ativo":
-            show_login_form()  # Mostrar "ACESSA" se já ativo
+            show_login_form()
+        elif status == "inativo":
+            page.show_snack_bar(ft.SnackBar(
+                ft.Text("Sua conta expirou. Entre em contato para reativar."),
+                bgcolor=ft.colors.RED_400,
+                duration=5000
+            ))
+            render_form()
         else:
-            render_form()  # Mostrar "ATIVA" se não ativo
+            render_form()
     elif pending_username:
         username_field.value = pending_username
         render_form()

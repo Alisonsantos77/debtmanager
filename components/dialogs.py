@@ -26,7 +26,7 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
 
     usage_dialog = CustomDialog(
         ft.Text("Informações do Plano", size=20, weight=ft.FontWeight.BOLD),
-        ft.Text("Carregando...", size=16, color=current_color_scheme.on_surface),
+        ft.Text("Carregando informações do plano...", size=16, color=current_color_scheme.on_surface),
         [ft.TextButton("Fechar", on_click=lambda e: usage_dialog.close_dialog())]
     )
 

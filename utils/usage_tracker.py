@@ -1,12 +1,14 @@
 class UsageTracker:
-    def __init__(self, user_plan):
+    def __init__(self, user_plan, user_id):
+        from utils.supabase_utils import read_supabase
         self.user_plan = user_plan
-        self.usage = {"messages_sent": 0, "pdfs_processed": 0}
-        self.limits = {
-            "basic": {"pdfs": 3, "messages": 5},  # Limites reduzidos para teste
-            "pro": {"pdfs": 10, "messages": 20},
-            "enterprise": {"pdfs": 50, "messages": 100}
+        user_data = read_supabase("users_debt", f"?id=eq.{user_id}")
+        self.usage = {
+            "messages_sent": user_data.get("messages_sent", 0),
+            "pdfs_processed": user_data.get("pdfs_processed", 0)
         }
+        plan_data = read_supabase("plans", f"?name=eq.{user_plan}")
+        self.limits = {user_plan: {"messages": plan_data["message_limit"], "pdfs": plan_data["pdf_limit"]}}
 
     def check_usage_limits(self, action, count=1):
         if action == "message":
