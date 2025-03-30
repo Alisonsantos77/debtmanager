@@ -90,7 +90,6 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
         ft.Column([
             ft.Text("Versão: 1.0.0", size=16),
             ft.Text("Desenvolvido por: Alison Santos", size=16),
-            ft.Text("GitHub: github.com/Alisonsantos77/AutomaFlet", size=16),
             ft.Text("Descrição: Ferramenta para automação de envio de notificações de dívidas.", size=16, italic=True)
         ], spacing=10),
         [ft.TextButton("Fechar", on_click=lambda e: about_dialog.close_dialog())]

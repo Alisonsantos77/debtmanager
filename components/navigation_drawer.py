@@ -22,6 +22,7 @@ def create_drawer(page: ft.Page, company_data: dict):
             page.go("/settings")
         elif selected_index == 3:
             page.go("/profile")
+    saved_avatar = page.client_storage.get("user_avatar")
 
     # Cabeçalho do Drawer
     drawer_header = ft.Container(
@@ -35,7 +36,7 @@ def create_drawer(page: ft.Page, company_data: dict):
                 ),
                 ft.CircleAvatar(
                     content=ft.Image(
-                        src=company_data["logo"],
+                        src=saved_avatar,
                         fit=ft.ImageFit.COVER,
                         border_radius=50,
                     ),

@@ -7,14 +7,15 @@ from components.profile_page import ProfilePage
 from components.settings import create_settings_page
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
-from components.login import create_login_page
-from components.register import create_register_page
+from components.login import LoginPage
+from components.register import RegisterPage
 
 logger = logging.getLogger(__name__)
 
 
 def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: dict):
     current_color_scheme = get_current_color_scheme(page)
+    saved_avatar = page.client_storage.get("user_avatar")
 
     def logout(e):
         page.client_storage.remove("user_id")
@@ -51,7 +52,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                             icon_color=current_color_scheme.primary,
                             content=ft.CircleAvatar(
                                 content=ft.Image(
-                                    src=company_data["logo"],
+                                    src=saved_avatar,
                                     fit=ft.ImageFit.COVER,
                                     border_radius=50,
                                 ),
@@ -90,7 +91,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
         page.views.append(
             ft.View(
                 route="/login",
-                controls=[create_login_page(page)],
+                controls=[LoginPage(page)],
                 scroll=ft.ScrollMode.HIDDEN,
                 vertical_alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER
@@ -112,7 +113,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             page.views.append(
                 ft.View(
                     route="/register",
-                    controls=[create_register_page(page)],
+                    controls=[RegisterPage(page)],
                     scroll=ft.ScrollMode.HIDDEN,
                     vertical_alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER

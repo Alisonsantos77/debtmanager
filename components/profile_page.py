@@ -1,152 +1,226 @@
-import asyncio
-import logging
 import flet as ft
-from flet import FilePicker, FilePickerResultEvent
-from utils.supabase_utils import read_supabase
+import smtplib
+from email.mime.text import MIMEText
+from utils.supabase_utils import read_supabase, write_supabase
+from utils.theme_utils import get_current_color_scheme
+from secrets import token_urlsafe
+import logging
+import os
+from dotenv import load_dotenv
+import base64
+
+load_dotenv()
+EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+SUPPORT_EMAIL = "Alisondev77@hotmail.com"
 
 logger = logging.getLogger(__name__)
 
 
-def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
-    name_field = ft.Ref[ft.TextField]()
-    email_field = ft.Ref[ft.TextField]()
-    phone_field = ft.Ref[ft.TextField]()
-    logo_display = ft.Ref[ft.CircleAvatar]()
-    current_logo = company_data.get("logo", "https://picsum.photos/150")
-    current_name = company_data.get("name", "Empresa Sem Nome")
-    current_email = company_data.get("contact_email", "sem@email.com")
-    current_phone = company_data.get("phone", "(00) 00000-0000")
-    usage_tracker = app_state.get("usage_tracker")
-    user_id = page.client_storage.get("user_id")
-    user_data = read_supabase("users_debt", f"?id=eq.{user_id}")
-    plan_id = user_data.get("plan_id", 1)
-    plan_data = read_supabase("plans", f"?id=eq.{plan_id}")
-    user_plan = plan_data.get("name", "basic")
-    app_state["user_plan"] = user_plan
-    user_plan_limits = {user_plan: {"messages": plan_data["message_limit"], "pdfs": plan_data["pdf_limit"]}}
-
-    def pick_logo_result(e: FilePickerResultEvent):
-        nonlocal current_logo
-        if e.files and e.files[0].path:
-            current_logo = e.files[0].path
-            logo_display.current.content = None  # Limpa antes
-            logo_display.current.content = ft.Image(src=current_logo, fit=ft.ImageFit.COVER)
-            company_data["logo"] = current_logo
-            page.update()
-            logger.info(f"Nova foto de perfil selecionada: {current_logo}")
-        else:
-            page.snack_bar = ft.SnackBar(ft.Text("Seleção de foto cancelada!"), bgcolor=ft.colors.RED)
-            page.snack_bar.open = True
-            page.update()
-
-    pick_logo_dialog = FilePicker(on_result=pick_logo_result)
-    page.overlay.append(pick_logo_dialog)
-
-    def show_loading():
-        loading_dialog = ft.AlertDialog(content=ft.Container(content=ft.ProgressRing(
-        ), alignment=ft.alignment.center), bgcolor=ft.Colors.TRANSPARENT, modal=True, disabled=True)
-        page.open(loading_dialog)
-        page.update()
-        return loading_dialog
-
-    def show_success(message="Dados atualizados!"):
-        success_dialog = ft.AlertDialog(content=ft.Container(content=ft.Column([ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.colors.GREEN), ft.Text(
-            message, size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN)], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER), alignment=ft.alignment.center), bgcolor=ft.colors.TRANSPARENT, modal=True, disabled=True)
-        page.open(success_dialog)
-        page.update()
-        return success_dialog
-
-    def hide_dialog(dialog):
-        page.close(dialog)
-        page.update()
-
-    def update_company_data(e):
-        nonlocal current_name, current_email, current_phone
-        new_name = name_field.current.value.strip()
-        new_email = email_field.current.value.strip()
-        new_phone = phone_field.current.value.strip()
-        if not new_name or not new_email or not new_phone:
-            page.snack_bar = ft.SnackBar(ft.Text("Preencha todos os campos obrigatórios!"), bgcolor=ft.colors.RED)
-            page.snack_bar.open = True
-            page.update()
-            return
-        loading_dialog = show_loading()
-        current_name, current_email, current_phone = new_name, new_email, new_phone
-        company_data["name"] = current_name
-        company_data["contact_email"] = current_email
-        company_data["phone"] = current_phone
-        company_data["logo"] = current_logo
-        if not current_logo.startswith("http"):
-            logo_display.current.content = ft.Image(src=current_logo, fit=ft.ImageFit.COVER)
-        else:
-            logo_display.current.content = ft.Text(current_name[0].upper(), size=40, weight=ft.FontWeight.BOLD)
-        hide_dialog(loading_dialog)
-        success_dialog = show_success()
-        page.run_task(lambda: asyncio.sleep(2)).then(lambda _: hide_dialog(success_dialog))
-        logger.info(f"Dados da empresa atualizados: {company_data}")
-        page.snack_bar = ft.SnackBar(ft.Text("Dados atualizados com sucesso!"), bgcolor=ft.colors.GREEN)
-        page.snack_bar.open = True
-        page.update()
-
-    profile_content = ft.Column([
-        ft.ResponsiveRow([
-            ft.Container(
-                col={"xs": 12, "sm": 6, "md": 4},
-                content=ft.Stack([
-                    ft.CircleAvatar(
-                        ref=logo_display,
-                        foreground_image_src=current_logo if current_logo.startswith("http") else None,
-                        content=ft.Image(src=current_logo, fit=ft.ImageFit.COVER) if not current_logo.startswith(
-                            "http") else ft.Text(current_name[0].upper(), size=40, weight=ft.FontWeight.BOLD),
-                        radius=60,
-                        bgcolor=ft.colors.BLUE_200,
-                        on_image_error=lambda e: logger.error(f"Erro ao carregar imagem: {e.data}")
-                    ),
-                    ft.Container(
-                        alignment=ft.alignment.bottom_right,
-                        content=ft.IconButton(icon=ft.Icons.EDIT, bgcolor=ft.colors.WHITE, icon_color=ft.colors.BLUE,
-                                              on_click=lambda _: pick_logo_dialog.pick_files(allowed_extensions=["png", "jpg", "jpeg"]))
-                    )
-                ]),
-                alignment=ft.alignment.center
-            ),
-            ft.Column(
-                col={"xs": 12, "sm": 6, "md": 8},
-                controls=[
-                    ft.TextField(ref=name_field, label="Nome da Empresa", value=current_name,
-                                 prefix_icon=ft.Icons.BUSINESS, border_radius=10),
-                    ft.TextField(ref=email_field, label="Email de Contato", value=current_email,
-                                 prefix_icon=ft.Icons.EMAIL, border_radius=10),
-                    ft.TextField(ref=phone_field, label="Telefone de Contato", value=current_phone,
-                                 prefix_icon=ft.Icons.PHONE, border_radius=10),
-                    ft.Row([
-                        ft.ElevatedButton("Atualizar Dados", icon=ft.Icons.SAVE, bgcolor=ft.colors.BLUE,
-                                          color=ft.colors.WHITE, on_click=update_company_data),
-                        ft.ElevatedButton("Fazer Upgrade", icon=ft.Icons.UPGRADE, bgcolor=ft.colors.GREEN,
-                                          color=ft.colors.WHITE, on_click=lambda e: page.launch_url("https://example.com/upgrade"))
-                    ], alignment=ft.MainAxisAlignment.SPACE_AROUND)
-                ],
-                spacing=15
-            )
-        ]),
-        ft.Divider(height=2, color=ft.colors.GREY_400),
-        ft.Text("Informações do Plano", size=20, weight=ft.FontWeight.BOLD),
-        ft.Card(
+class PlanCard(ft.Card):
+    def __init__(self, plan_name: str, messages: str, pdfs: str, price: str, description: str, bgcolor: str, letter: str):
+        super().__init__(
             content=ft.Container(
                 content=ft.Column([
-                    ft.Row([ft.Icon(ft.Icons.AIRPLANE_TICKET, color=ft.colors.BLUE), ft.Text(
-                        f"Plano Atual: {user_plan.capitalize()}", size=16, weight=ft.FontWeight.BOLD)]),
-                    ft.Row([ft.Icon(ft.Icons.BUSINESS, color=ft.colors.BLUE), ft.Text(
-                        f"Limites: {user_plan_limits[user_plan]['messages']} mensagens, {user_plan_limits[user_plan]['pdfs']} PDFs", size=14)]),
-                    ft.Row([ft.Icon(ft.Icons.MESSAGE, color=ft.colors.BLUE), ft.Text(
-                        f"Mensagens Enviadas: {usage_tracker.get_usage('messages_sent') if usage_tracker else 0}", size=14)]),
-                    ft.Row([ft.Icon(ft.Icons.PICTURE_AS_PDF, color=ft.colors.BLUE), ft.Text(
-                        f"PDFs Processados: {usage_tracker.get_usage('pdfs_processed') if usage_tracker else 0}", size=14)])
-                ], spacing=10),
-                padding=15
+                    ft.CircleAvatar(content=ft.Text(letter), bgcolor=bgcolor, color=ft.Colors.WHITE),
+                    ft.Text(plan_name, size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text(messages),
+                    ft.Text(pdfs),
+                    ft.Text(f"R$ {price}", size=16, color=ft.Colors.GREEN),
+                    ft.Text(description, italic=True)
+                ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+                padding=20
             ),
-            elevation=3
+            elevation=5,
+            col={"xs": 12, "sm": 6, "md": 4}
         )
-    ], spacing=20, alignment=ft.MainAxisAlignment.CENTER, expand=True)
 
-    return profile_content
+
+def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
+    current_color_scheme = get_current_color_scheme(page)
+
+    username = page.client_storage.get("username") or "Alison Santos"
+    user_id = page.client_storage.get("user_id")
+    user_data = read_supabase("users_debt", f"?id=eq.{user_id}")
+    current_email = user_data.get("email", "Alisondev77@hotmail.com") if user_data else "Alisondev77@hotmail.com"
+    current_plan_id = user_data.get("plan_id", 1) if user_data else 1
+
+    usage_tracker = app_state["usage_tracker"]
+    plans_data = [
+        {"id": 1, "name": "basic", "message_limit": 100, "pdf_limit": 5, "price": "150.00"},
+        {"id": 2, "name": "pro", "message_limit": 200, "pdf_limit": 15, "price": "250.00"},
+        {"id": 3, "name": "enterprise", "message_limit": 500, "pdf_limit": 30, "price": "400.00"}
+    ]
+    current_plan = next((p for p in plans_data if p["id"] == current_plan_id), plans_data[0])
+
+    # Filtra opções de upgrade com base no plano atual
+    available_plans = [p["name"] for p in plans_data if p["id"] > current_plan["id"]]
+    plan_dropdown = ft.Dropdown(
+        label="Escolher Novo Plano",
+        options=[ft.dropdown.Option(plan) for plan in available_plans],
+        width=200
+    )
+    upgrade_code_field = ft.TextField(label="Código de Upgrade", width=200)
+    feedback_text = ft.Text("", color=ft.Colors.GREEN)
+
+    saved_avatar = page.client_storage.get("user_avatar")
+    initial_avatar_url = f"https://api.dicebear.com/6.x/initials/svg?seed={username[0].upper()}"
+    avatar = ft.CircleAvatar(
+        content=ft.Image(
+            src=saved_avatar or initial_avatar_url,
+            fit=ft.ImageFit.COVER,
+            border_radius=50,
+        ),
+        radius=30,
+        bgcolor=current_color_scheme.primary_container
+    )
+
+    def get_file_type(file_path):
+        ext = file_path.lower().split(".")[-1]
+        return {"png": "png", "jpg": "jpeg", "jpeg": "jpeg"}.get(ext, "png")
+
+    def update_avatar(e: ft.FilePickerResultEvent):
+        if e.files:
+            with open(e.files[0].path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+            file_type = get_file_type(e.files[0].path)
+            avatar.content.src = f"data:image/{file_type};base64,{img_data}"
+            page.client_storage.set("user_avatar", avatar.content.src)
+            page.update()
+        else:
+            avatar.content.src = initial_avatar_url
+            page.update()
+
+    file_picker = ft.FilePicker(on_result=update_avatar)
+    page.overlay.append(file_picker)
+
+    def send_upgrade_request(username, email, current_plan, new_plan, code):
+        current_info = next(p for p in plans_data if p["name"] == current_plan)
+        new_info = next(p for p in plans_data if p["name"] == new_plan)
+        try:
+            msg = MIMEText(
+                f"Solicitação de Upgrade:\n"
+                f"Usuário: {username}\n"
+                f"Email: {email}\n"
+                f"De: {current_plan} (Limites: {current_info['message_limit']} mensagens/mês, {current_info['pdf_limit']} PDFs/mês, Preço: R$ {current_info['price']})\n"
+                f"Para: {new_plan} (Limites: {new_info['message_limit']} mensagens/mês, {new_info['pdf_limit']} PDFs/mês, Preço: R$ {new_info['price']})\n"
+                f"Código de Upgrade: {code}"
+            )
+            msg['Subject'] = "Solicitação de Upgrade - DebtManager"
+            msg['From'] = EMAIL_SENDER
+            msg['To'] = SUPPORT_EMAIL
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()
+                server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+                server.send_message(msg)
+            logger.info(f"Email de upgrade enviado para {SUPPORT_EMAIL}")
+        except Exception as e:
+            logger.error(f"Erro ao enviar email: {e}")
+            feedback_text.value = "Erro ao enviar solicitação."
+            page.update()
+
+    def request_upgrade(e):
+        new_plan = plan_dropdown.value
+        if not new_plan:
+            page.open(ft.SnackBar(ft.Text("Selecione um plano!"), bgcolor=ft.Colors.RED))
+            return
+        upgrade_code = token_urlsafe(16)
+        write_supabase(
+            "upgrade_requests",
+            {"user_id": user_id, "plan_id": next(
+                p["id"] for p in plans_data if p["name"] == new_plan), "code": upgrade_code, "status": "pending"}
+        )
+        send_upgrade_request(username, current_email, current_plan["name"], new_plan, upgrade_code)
+        feedback_text.value = f"Pedido enviado! Código: {upgrade_code}"
+        page.update()
+
+    def apply_upgrade(e):
+        code = upgrade_code_field.value.strip()
+        logger.info(f"Tentando aplicar código: {code}")
+        if not code:
+            feedback_text.value = "Insira o código de upgrade!"
+            page.open(ft.SnackBar(ft.Text("Insira o código de upgrade!"), bgcolor=ft.Colors.RED))
+            page.update()
+            return
+        request = read_supabase("upgrade_requests", f"?user_id=eq.{user_id}&code=eq.{code}&status=eq.pending")
+        logger.info(f"Resultado da consulta ao Supabase: {request}")
+        if request and isinstance(request, list) and len(request) > 0:
+            plan_id = request[0].get("plan_id")
+            logger.info(f"Plan ID encontrado: {plan_id}")
+            selected_plan = next((p for p in plans_data if p["id"] == plan_id), None)
+            if selected_plan:
+                logger.info(f"Plano selecionado: {selected_plan['name']}")
+                usage_tracker.usage["messages_sent"] = 0
+                usage_tracker.usage["pdfs_processed"] = 0
+                usage_tracker.sync_with_supabase(user_id)
+                write_supabase(f"users_debt?id=eq.{user_id}", {
+                               "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0}, method="patch")
+                write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {"status": "approved"}, method="patch")
+                page.client_storage.set("debtmanager.user_plan", selected_plan["name"])
+                app_state["user_plan"] = selected_plan["name"]
+                feedback_text.value = f"Plano atualizado para {selected_plan['name']}!"
+            else:
+                logger.error(f"Plano com ID {plan_id} não encontrado em plans_data")
+                feedback_text.value = "Plano não encontrado."
+        else:
+            logger.error(f"Requisição inválida ou não encontrada para código {code}")
+            feedback_text.value = "Código inválido ou solicitação não encontrada."
+        page.update()
+
+    plan_cards = ft.ResponsiveRow([
+        PlanCard("Básico", "100 mensagens/mês", "5 PDFs/mês", "150,00",
+                 "Ideal para iniciantes!", ft.Colors.BLUE_700, "B"),
+        PlanCard("Pro", "200 mensagens/mês", "15 PDFs/mês", "250,00",
+                 "Mais poder para crescer!", ft.Colors.PURPLE_700, "P"),
+        PlanCard("Enterprise", "500 mensagens/mês", "30 PDFs/mês", "400,00",
+                 "Domine suas notificações!", ft.Colors.RED_700, "E")
+    ], alignment=ft.MainAxisAlignment.CENTER)
+
+    social_icons = ft.Row(
+        controls=[
+            ft.IconButton(content=ft.Image(src="images/contact/icons8-whatsapp-48.png", width=40, height=40), icon_color=ft.Colors.GREEN, tooltip="Abrir WhatsApp",
+                          url="https://wa.link/oebrg2", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREEN})),
+            ft.IconButton(content=ft.Image(src="images/contact/outlook-logo.png", width=40, height=40), icon_color=ft.Colors.PRIMARY, tooltip="Enviar Email",
+                          url="mailto:Alisondev77@hotmail.com?subject=Feedback%20-%20DebtManager&body=Olá, gostaria de fornecer feedback.", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
+            ft.IconButton(content=ft.Image(src="images/contact/icons8-linkedin-48.png", width=40, height=40), tooltip="Acessar LinkedIn",
+                          url="https://www.linkedin.com/in/alisonsantosdev", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
+            ft.IconButton(content=ft.Image(src="images/contact/icons8-github-64.png", width=40, height=40), icon_color=ft.Colors.PRIMARY, tooltip="Acessar GitHub",
+                          url="https://github.com/Alisonsantos77", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREY})),
+        ],
+        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+    )
+
+    profile_content = ft.Column([
+        ft.Row([
+            avatar,
+            ft.Column([
+                ft.Text(f"Bem-vindo, {username}!", size=24, weight=ft.FontWeight.BOLD),
+                ft.ElevatedButton("Escolher Foto de Perfil", on_click=lambda _: file_picker.pick_files(
+                    allowed_extensions=["png", "jpg", "jpeg"]))
+            ], spacing=10)
+        ], alignment=ft.MainAxisAlignment.START),
+        ft.Text(f"Email: {current_email}", size=16),
+        ft.Text(f"Plano Atual: {current_plan['name']}", size=16),
+        ft.Divider(),
+        ft.Text("Escolha seu Novo Plano", size=20, weight=ft.FontWeight.BOLD),
+        plan_cards,
+        ft.Row([plan_dropdown, ft.ElevatedButton("Solicitar Upgrade", on_click=request_upgrade)]),
+        ft.Row([upgrade_code_field, ft.ElevatedButton("Aplicar Upgrade", on_click=apply_upgrade)]),
+        feedback_text,
+        ft.Divider(),
+        ft.Text("Contato", size=20, weight=ft.FontWeight.BOLD),
+        social_icons,
+        ft.Divider(),
+        ft.Text("Termos de Uso e Política de Privacidade", size=20, weight=ft.FontWeight.BOLD),
+        ft.Text("Bem-vindo ao DebtManager!", size=16, weight=ft.FontWeight.BOLD),
+        ft.Text("O DebtManager é uma ferramenta de automação para envio de notificações de dívidas, projetada para otimizar a gestão financeira de empresas e usuários individuais. Ao utilizar este aplicativo, você concorda com os seguintes termos:"),
+        ft.Text("1. Uso Responsável: O DebtManager deve ser utilizado exclusivamente para fins legítimos e legais, como o envio de notificações de dívidas válidas. Qualquer uso indevido, incluindo spam ou assédio, resultará na suspensão da conta."),
+        ft.Text("2. Privacidade e Segurança: Seus dados pessoais e financeiros são protegidos conforme a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018). Utilizamos criptografia para armazenar informações sensíveis e não compartilhamos seus dados com terceiros sem consentimento explícito."),
+        ft.Text("3. Limites de Uso: Cada plano possui limites de mensagens e PDFs processados. Exceder esses limites requer upgrade de plano. Tentativas de burlar essas restrições podem levar ao bloqueio da conta."),
+        ft.Text("4. Pagamento e Upgrades: Os planos são pagos e os upgrades requerem validação manual via código enviado ao suporte. Não há reembolsos após a ativação do plano."),
+        ft.Text("5. Suporte e Responsabilidade: Oferecemos suporte técnico via email e WhatsApp. Não nos responsabilizamos por falhas causadas por uso incorreto do aplicativo ou por interrupções em serviços de terceiros (e.g., Twilio, Supabase)."),
+        ft.Text("6. Atualizações e Disponibilidade: O DebtManager pode receber atualizações que modifiquem funcionalidades. Reservamo-nos o direito de suspender o serviço para manutenção sem aviso prévio."),
+        ft.Text("Para dúvidas, entre em contato com nosso suporte em Alisondev77@hotmail.com ou via WhatsApp.")
+    ], spacing=20, scroll=ft.ScrollMode.AUTO)
+
+    return ft.Container(content=profile_content, padding=20)

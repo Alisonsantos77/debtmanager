@@ -67,23 +67,32 @@ def update_usage_data(user_id: str, messages_sent: int, pdfs_processed: int) -> 
     return success
 
 
-def validate_user(username: str, code: str) -> tuple:
-    logger.info(f"Validando usuário: {username}")
+def validate_user(username: str, code: str, encrypted: bool = False) -> tuple:
+    logger.info(f"Iniciando validação do usuário: {username}")
     data = read_supabase("users_debt", f"?username=eq.{username}")
     if not data:
-        logger.warning(f"Usuário {username} não encontrado")
+        logger.warning(f"Usuário {username} não encontrado no Supabase")
         return "invalid", None
     user = data
+    logger.info(f"Dados do usuário retornados: {user}")
     try:
-        decrypted_code = decrypt(user["activation_code"], SECRET_KEY)
-        logger.info(f"Código descriptografado para {username}")
-        if decrypted_code != code:
-            logger.warning(f"Código inválido para {username}")
-            return "invalid", None
-        logger.info(f"Usuário {username} validado com status: {user['status']}")
+        stored_code = user["activation_code"]
+        if encrypted:
+            decrypted_code = decrypt(stored_code, SECRET_KEY)
+            logger.info(f"Código de ativação descriptografado com sucesso para {username}: {decrypted_code}")
+            if decrypted_code != code:
+                logger.warning(
+                    f"Código fornecido '{code}' não corresponde ao descriptografado '{decrypted_code}' para {username}")
+                return "invalid", None
+        else:
+            if stored_code != code:
+                logger.warning(
+                    f"Código fornecido '{code}' não corresponde ao armazenado '{stored_code}' para {username}")
+                return "invalid", None
+        logger.info(f"Validação bem-sucedida para {username} com status: {user['status']}")
         return user["status"], user
     except Exception as e:
-        logger.error(f"Erro ao descriptografar código para {username}: {e}")
+        logger.error(f"Erro ao processar o código de ativação para {username}: {str(e)}")
         return "invalid", None
 
 

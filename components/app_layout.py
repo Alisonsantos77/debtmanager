@@ -27,7 +27,7 @@ class ClientListTile(ft.ListTile):
             subtitle=ft.Text(f"Valor: {client.debt_amount} | Vencimento: {client.due_date}",
                              color=current_color_scheme.on_surface),
             trailing=ft.IconButton(icon=ft.Icons.INFO, icon_color=current_color_scheme.primary,
-                                   on_click=lambda e: on_info_click(client)),
+                                   on_click=lambda _: print("Info clicado")),
             content_padding=ft.padding.symmetric(horizontal=10),
             on_click=lambda e: on_click(client),
             bgcolor=ft.Colors.TRANSPARENT
@@ -65,7 +65,7 @@ def create_app_layout(page: ft.Page):
     last_sent = None
     selected_client = None
     username = page.client_storage.get("username") or "default_user"
-    user_id = page.client_storage.get("user_id") or fetch_user_id(username)
+    user_id = fetch_user_id(username)
     logger.info(f"Iniciando app para usuário {username} com ID {user_id}")
     user_data = read_supabase("users_debt", f"?id=eq.{user_id}")
     logger.info(f"Dados do usuário no Supabase: {user_data}")
@@ -221,7 +221,9 @@ def create_app_layout(page: ft.Page):
         await asyncio.sleep(1)
         success = message_manager.send_single_notification(client, message_body)
         if tile:
-            tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR)
+            tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
+                                    color=ft.Colors.GREEN if success else ft.Colors.RED
+                                    )
             page.update()
         if success:
             usage_tracker.increment_usage("messages_sent")
