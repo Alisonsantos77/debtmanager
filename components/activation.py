@@ -1,19 +1,18 @@
 from time import sleep
 import flet as ft
 import logging
-from utils.supabase_utils import validate_user, fetch_user_id
+from utils.supabase_utils import validate_user, update_user_status
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
 
-def LoginPage(page: ft.Page):
+def ActivationPage(page: ft.Page):
     username_field = ft.TextField(label="Usuário", width=300, border_color=ft.Colors.BLUE)
-    password_field = ft.TextField(label="Senha", width=300, border_color=ft.Colors.BLUE, password=True)
+    activation_code_field = ft.TextField(label="Código", width=300, border_color=ft.Colors.BLUE, password=True)
     status_text = ft.Text("", color=ft.Colors.RED)
-    login_button = ft.ElevatedButton("Entrar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
-    register_button = ft.TextButton("Cadastrar", on_click=lambda _: page.go("/register"))
-    activate_button = ft.TextButton("Ativar Conta", on_click=lambda _: page.go("/activate"))
+    activate_button = ft.ElevatedButton("Ativar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
+    login_button = ft.TextButton("Acessar", on_click=lambda _: page.go("/login"))
 
     def show_success_and_redirect(route, message="Sucesso!"):
         success_dialog = ft.AlertDialog(
@@ -56,55 +55,49 @@ def LoginPage(page: ft.Page):
         page.close(dialog)
         page.update()
 
-    def login(e):
+    def activate(e):
         username = username_field.value.strip()
-        password = password_field.value.strip()
-        if not username or not password:
-            status_text.value = "Preencha usuário e senha!"
+        code = activation_code_field.value.strip()
+        if not username or not code:
+            status_text.value = "Preencha todos os campos!"
             page.update()
             return
 
         loading_dialog = show_loading()
-        status, user = validate_user(username, password, encrypted=True, page=page)
-        logger.info(f"Resultado da validação para {username}: status={status}")
-
-        if status == "ativo" and user:
-            user_id = fetch_user_id(username, page)
-            if user_id:
-                page.client_storage.set("username", username)
-                page.client_storage.set("user_id", user_id)
-                page.client_storage.set("session_expiry", (datetime.now(
-                    timezone.utc) + timedelta(hours=24)).isoformat())
-                logger.info(f"Login bem-sucedido para {username}. Username e user_id salvos no client_storage.")
-                hide_loading(loading_dialog)
-                show_success_and_redirect("/clients", "Bem-vindo de volta!")
-            else:
-                hide_loading(loading_dialog)
-                status_text.value = "Erro ao pegar seu ID. Tenta de novo!"
-                page.update()
-        elif status == "pendente":
+        status, user = validate_user(username, code, encrypted=True, page=page)
+        if status == "pendente" and user:
+            now = datetime.now(timezone.utc)
+            session_expiry = now + timedelta(hours=24)
+            update_user_status(username, "ativo", {"data_expiracao": (now + timedelta(days=30)).isoformat()}, page)
+            page.client_storage.set("username", username)
+            page.client_storage.set("user_id", user["id"])
+            page.client_storage.set("session_expiry", session_expiry.isoformat())
+            logger.info(f"Conta ativada para {username}. Dados salvos no client_storage.")
             hide_loading(loading_dialog)
-            status_text.value = "Conta não ativada. Ative primeiro!"
-            page.update()
+            show_success_and_redirect ("/clients", "Conta ativada! Bem-vindo!")
+        elif status == "ativo" and user:
+            hide_loading(loading_dialog)
+            status_text.value = "Conta já ativada."
+            show_success_and_redirect("/login", "Redirecionando para login...")
         else:
             hide_loading(loading_dialog)
-            status_text.value = "Usuário ou senha inválidos. Tenta novamente!"
-            logger.warning(f"Falha no login para {username}: status={status}")
+            status_text.value = "Usuário não encontrado ou código inválido."
+            logger.warning(f"Falha na ativação para {username}: status={status}")
             page.update()
 
-    login_button.on_click = login
+    activate_button.on_click = activate
 
     page.clean()
     form_card = ft.Card(
         content=ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("Login", size=24, weight=ft.FontWeight.BOLD),
+                    ft.Text("Ativação", size=24, weight=ft.FontWeight.BOLD),
                     username_field,
-                    password_field,
+                    activation_code_field,
                     status_text,
+                    activate_button,
                     login_button,
-                    ft.Row([register_button, activate_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ],
                 spacing=15,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,

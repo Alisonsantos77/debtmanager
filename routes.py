@@ -1,14 +1,16 @@
-import flet as ft
 import logging
+
+import flet as ft
+
+from components.activation import ActivationPage
 from components.client_details import create_client_details_page
 from components.dashboard import create_dashboard_page
+from components.login import LoginPage
 from components.navigation_drawer import create_drawer
 from components.profile_page import ProfilePage
-from components.settings import create_settings_page
+from components.register import RegisterPage
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
-from components.login import LoginPage
-from components.register import RegisterPage
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +18,17 @@ logger = logging.getLogger(__name__)
 def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: dict):
     current_color_scheme = get_current_color_scheme(page)
     saved_avatar = page.client_storage.get("user_avatar")
+    username = page.client_storage.get("username")
 
     def logout(e):
-        page.client_storage.remove("user_id")
-        page.client_storage.remove("pending_username")
-        page.client_storage.remove("username")
-        print("Usuário deslogado")
+        page.client_storage.clear()
+        app_state["usage_tracker"] = None
+        logger.info("Usuário deslogado")
         page.go("/login")
         page.update()
 
     def route_change(route):
+
         company_data.update({
             "name": company_data.get("name", "DebtManager"),
             "logo": company_data.get("logo", "https://picsum.photos/150"),
@@ -38,7 +41,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             def __init__(self, title):
                 super().__init__(
                     title=ft.Text(
-                        f"{company_data['name']} - {title}",
+                        f"{username} - {title}",
                         size=20,
                         weight=ft.FontWeight.BOLD,
                         color=current_color_scheme.primary
@@ -73,11 +76,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                     on_click=lambda e: layout_data["toggle_theme"](),
                                 ),
                                 ft.PopupMenuItem(
-                                    text="Configurações",
-                                    icon=ft.Icons.SETTINGS,
-                                    on_click=lambda e: page.go("/settings")
-                                ),
-                                ft.PopupMenuItem(
                                     text="Sair",
                                     icon=ft.Icons.EXIT_TO_APP,
                                     on_click=logout
@@ -93,8 +91,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                 route="/login",
                 controls=[LoginPage(page)],
                 scroll=ft.ScrollMode.HIDDEN,
-                vertical_alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
             ))
 
         if page.route == "/clients":
@@ -119,7 +115,17 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
                 )
             )
-
+        elif page.route == "/activation":
+            page.title = "Ativação"
+            page.views.append(
+                ft.View(
+                    route="/activation",
+                    controls=[ActivationPage(page)],
+                    scroll=ft.ScrollMode.HIDDEN,
+                    vertical_alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                )
+            )
         elif page.route == "/dashboard":
             page.title = "Dashboard"
             history = get_client_history(None)
@@ -132,17 +138,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     scroll=ft.ScrollMode.HIDDEN
                 )
             )
-        elif page.route == "/settings":
-            page.title = "Configurações"
-            page.views.append(
-                ft.View(
-                    route="/settings",
-                    drawer=create_drawer(page, company_data),
-                    appbar=create_appbar("Configurações"),
-                    controls=[create_settings_page()],
-                    scroll=ft.ScrollMode.HIDDEN
-                )
-            )
         elif page.route == "/profile":
             page.title = "Perfil"
             page.views.append(
@@ -151,7 +146,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     drawer=create_drawer(page, company_data),
                     appbar=create_appbar("Perfil"),
                     controls=[ProfilePage(page, company_data, app_state)],
-                    scroll=ft.ScrollMode.HIDDEN
+                    scroll=ft.ScrollMode.HIDDEN,
                 )
             )
 

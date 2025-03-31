@@ -13,7 +13,7 @@ load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 SUPPORT_EMAIL = "Alisondev77@hotmail.com"
-secret_key = os.getenv("MY_APP_SECRET_KEY")  # Chave secreta do ambiente
+SECRET_KEY = os.getenv("MY_APP_SECRET_KEY")
 
 logger = logging.getLogger(__name__)
 
@@ -64,22 +64,21 @@ def RegisterPage(page: ft.Page):
             modal=True,
             disabled=True,
         )
+        page.dialog = success_dialog
         page.open(success_dialog)
         page.update()
-        sleep(3)
+        sleep(2)
         page.close(success_dialog)
         page.go(route)
 
     def show_loading():
         loading_dialog = ft.AlertDialog(
-            content=ft.Container(
-                content=ft.ProgressRing(),
-                alignment=ft.alignment.center,
-            ),
+            content=ft.Container(content=ft.ProgressRing(), alignment=ft.alignment.center),
             bgcolor=ft.Colors.TRANSPARENT,
             modal=True,
             disabled=True,
         )
+        page.dialog = loading_dialog
         page.open(loading_dialog)
         page.update()
         return loading_dialog
@@ -98,9 +97,8 @@ def RegisterPage(page: ft.Page):
             return
 
         loading_dialog = show_loading()
-        # Gera um código numérico de 6 dígitos e criptografa
         activation_code = str(random.randint(100000, 999999))
-        encrypted_code = encrypt(activation_code, secret_key)
+        encrypted_code = encrypt(activation_code, SECRET_KEY)
         plan_info = plans_data[plan]
         try:
             msg = MIMEText(
@@ -133,15 +131,17 @@ def RegisterPage(page: ft.Page):
                 "username": username,
                 "email": email,
                 "status": "pendente",
-                "activation_code": encrypted_code,  # Armazena o código criptografado
+                "activation_code": encrypted_code,
                 "plan_id": plans_data[plan]["id"],
                 "messages_sent": 0,
                 "pdfs_processed": 0
             }
         ):
+            page.client_storage.set("username", username)
+            page.client_storage.set("plan_id", plans_data[plan]["id"])  # Armazena plan_id no client_storage
             hide_loading(loading_dialog)
             show_success_and_redirect(
-                "/login", f"Registro enviado! Código: {activation_code}\nAguarde ativação pelo suporte.")
+                "/activation", f"Registro enviado! Código: {activation_code}\nAguarde ativação pelo suporte.")
         else:
             hide_loading(loading_dialog)
             status_text.value = "Erro ao registrar."
