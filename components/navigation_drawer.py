@@ -22,7 +22,7 @@ def create_drawer(page: ft.Page, company_data: dict):
             page.go("/dashboard")
     username = page.client_storage.get("username")
     saved_avatar = page.client_storage.get("user_avatar")
-    username_initials = ''.join([name[0].upper() for name in username.split() if name])[:2]
+
 
     # Cabeçalho do Drawer
     drawer_header = ft.Container(
@@ -34,12 +34,18 @@ def create_drawer(page: ft.Page, company_data: dict):
                     weight=ft.FontWeight.BOLD,
                     color=current_color_scheme.primary,
                 ),
-                ft.CircleAvatar(
-                    foreground_image_src=saved_avatar,
-                    size=50,
-                    content=ft.Text(f"{username_initials}"),
-                    radius=30,
-                    bgcolor=current_color_scheme.primary_container
+                ft.Stack(
+                    [
+                        ft.CircleAvatar(
+                            foreground_image_src=saved_avatar if saved_avatar else "https://picsum.photos/150",
+                        ),
+                        ft.Container(
+                            content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
+                            alignment=ft.alignment.bottom_left,
+                        ),
+                    ],
+                    width=40,
+                    height=40,
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,

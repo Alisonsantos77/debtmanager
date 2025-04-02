@@ -53,16 +53,18 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                             icon=ft.Icons.PERSON,
                             tooltip="Perfil",
                             icon_color=current_color_scheme.primary,
-                            content=ft.CircleAvatar(
-                                content=ft.Image(
-                                    src=saved_avatar,
-                                    fit=ft.ImageFit.COVER,
-                                    border_radius=50,
-                                ),
-                                radius=30,
-                                bgcolor=current_color_scheme.primary_container,
-                                width=35,
-                                height=35
+                            content=ft.Stack(
+                                [
+                                    ft.CircleAvatar(
+                                        foreground_image_src=saved_avatar if saved_avatar else "https://picsum.photos/150",
+                                    ),
+                                    ft.Container(
+                                        content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
+                                        alignment=ft.alignment.bottom_left,
+                                    ),
+                                ],
+                                width=40,
+                                height=40,
                             ),
                             items=[
                                 ft.PopupMenuItem(

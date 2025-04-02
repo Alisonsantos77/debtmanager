@@ -64,15 +64,19 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     feedback_text = ft.Text("", color=ft.Colors.GREEN)
 
     saved_avatar = page.client_storage.get("user_avatar")
-    initial_avatar_url = f"https://api.dicebear.com/6.x/initials/svg?seed={username[0].upper()}"
-    avatar = ft.CircleAvatar(
-        content=ft.Image(
-            src=saved_avatar or initial_avatar_url,
-            fit=ft.ImageFit.COVER,
-            border_radius=50,
-        ),
-        radius=30,
-        bgcolor=current_color_scheme.primary_container
+
+    avatar = ft.Stack(
+        [
+            ft.CircleAvatar(
+                foreground_image_src=saved_avatar if saved_avatar else "https://picsum.photos/150",
+            ),
+            ft.Container(
+                content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
+                alignment=ft.alignment.bottom_left,
+            ),
+        ],
+        width=40,
+        height=40,
     )
 
     def get_file_type(file_path):
@@ -88,8 +92,8 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             page.client_storage.set("user_avatar", avatar.content.src)
             page.update()
         else:
-            avatar.content.src = initial_avatar_url
-            page.update()
+            logger.error("Nenhum arquivo selecionado.")
+            
 
     file_picker = ft.FilePicker(on_result=update_avatar)
     page.overlay.append(file_picker)

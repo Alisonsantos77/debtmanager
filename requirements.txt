@@ -1,0 +1,8 @@
+anthropic
+cryptography
+flet
+PyMuPDF
+pytz
+requests
+twilio
+python-dotenv
