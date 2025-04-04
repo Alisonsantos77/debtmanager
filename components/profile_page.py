@@ -8,12 +8,13 @@ import logging
 import os
 from dotenv import load_dotenv
 import base64
+from components.app_layout import get_usage_data  # Importa pra usar o Client Storage
 
 load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 SUPPORT_EMAIL = "Alisondev77@hotmail.com"
-
+URL_DICEBEAR = os.getenv("URL_DICEBEAR")
 logger = logging.getLogger(__name__)
 
 
@@ -38,14 +39,24 @@ class PlanCard(ft.Card):
 
 def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     current_color_scheme = get_current_color_scheme(page)
+    avatar_img = ft.Ref[ft.CircleAvatar]()
 
-    username = page.client_storage.get("username") or "Alison Santos"
-    user_id = page.client_storage.get("user_id")
-    user_data = read_supabase("users_debt", f"?id=eq.{user_id}")
+    prefix = "debtmanager."
+    username = page.client_storage.get(f"{prefix}username") or "Debt Manager"
+    user_id = page.client_storage.get(f"{prefix}user_id")
+    if not username or not user_id:
+        logger.warning("Username ou user_id não encontrados no client_storage. Redirecionando para login.")
+        page.overlay.append(ft.SnackBar(
+            ft.Text("Parece que você não tá logado. Vamos pro login!"), bgcolor=ft.Colors.RED))
+        page.go("/login")
+        page.update()
+        return ft.Container()
+
+    user_data = read_supabase("users_debt", f"?id=eq.{user_id}", page)
     current_email = user_data.get("email", "Alisondev77@hotmail.com") if user_data else "Alisondev77@hotmail.com"
     current_plan_id = user_data.get("plan_id", 1) if user_data else 1
+    usage_data = get_usage_data(page)
 
-    usage_tracker = app_state["usage_tracker"]
     plans_data = [
         {"id": 1, "name": "basic", "message_limit": 100, "pdf_limit": 5, "price": "150.00"},
         {"id": 2, "name": "pro", "message_limit": 200, "pdf_limit": 15, "price": "250.00"},
@@ -63,12 +74,11 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     upgrade_code_field = ft.TextField(label="Código de Upgrade", width=200)
     feedback_text = ft.Text("", color=ft.Colors.GREEN)
 
-    saved_avatar = page.client_storage.get("user_avatar")
-
     avatar = ft.Stack(
         [
             ft.CircleAvatar(
-                foreground_image_src=saved_avatar if saved_avatar else "https://picsum.photos/150",
+                foreground_image_src=f"{URL_DICEBEAR}seed={username}",
+                ref=avatar_img,
             ),
             ft.Container(
                 content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
@@ -79,24 +89,11 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         height=40,
     )
 
-    def get_file_type(file_path):
-        ext = file_path.lower().split(".")[-1]
-        return {"png": "png", "jpg": "jpeg", "jpeg": "jpeg"}.get(ext, "png")
-
-    def update_avatar(e: ft.FilePickerResultEvent):
-        if e.files:
-            with open(e.files[0].path, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode("utf-8")
-            file_type = get_file_type(e.files[0].path)
-            avatar.content.src = f"data:image/{file_type};base64,{img_data}"
-            page.client_storage.set("user_avatar", avatar.content.src)
-            page.update()
-        else:
-            logger.error("Nenhum arquivo selecionado.")
-            
-
-    file_picker = ft.FilePicker(on_result=update_avatar)
-    page.overlay.append(file_picker)
+    def mudar_perfil(e):
+        novo_avatar = f"{URL_DICEBEAR}seed={username}"
+        avatar_img.current.value = novo_avatar
+        page.client_storage.set(f"{prefix}avatar", novo_avatar)
+        page.update()
 
     def send_upgrade_request(username, email, current_plan, new_plan, code):
         current_info = next(p for p in plans_data if p["name"] == current_plan)
@@ -132,7 +129,8 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         write_supabase(
             "upgrade_requests",
             {"user_id": user_id, "plan_id": next(
-                p["id"] for p in plans_data if p["name"] == new_plan), "code": upgrade_code, "status": "pending"}
+                p["id"] for p in plans_data if p["name"] == new_plan), "code": upgrade_code, "status": "pending"},
+            page=page
         )
         send_upgrade_request(username, current_email, current_plan["name"], new_plan, upgrade_code)
         feedback_text.value = f"Pedido enviado! Código: {upgrade_code}"
@@ -146,7 +144,7 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             page.open(ft.SnackBar(ft.Text("Insira o código de upgrade!"), bgcolor=ft.Colors.RED))
             page.update()
             return
-        request = read_supabase("upgrade_requests", f"?user_id=eq.{user_id}&code=eq.{code}&status=eq.pending")
+        request = read_supabase("upgrade_requests", f"?user_id=eq.{user_id}&code=eq.{code}&status=eq.pending", page)
         logger.info(f"Resultado da consulta ao Supabase: {request}")
         if request and isinstance(request, list) and len(request) > 0:
             plan_id = request[0].get("plan_id")
@@ -154,13 +152,13 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             selected_plan = next((p for p in plans_data if p["id"] == plan_id), None)
             if selected_plan:
                 logger.info(f"Plano selecionado: {selected_plan['name']}")
-                usage_tracker.usage["messages_sent"] = 0
-                usage_tracker.usage["pdfs_processed"] = 0
-                usage_tracker.sync_with_supabase(user_id)
+                page.client_storage.set(f"{prefix}messages_sent", 0)
+                page.client_storage.set(f"{prefix}pdfs_processed", 0)
                 write_supabase(f"users_debt?id=eq.{user_id}", {
-                               "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0}, method="patch")
-                write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {"status": "approved"}, method="patch")
-                page.client_storage.set("debtmanager.user_plan", selected_plan["name"])
+                    "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0}, method="patch", page=page)
+                write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {
+                               "status": "approved"}, method="patch", page=page)
+                page.client_storage.set(f"{prefix}user_plan", selected_plan["name"])
                 app_state["user_plan"] = selected_plan["name"]
                 feedback_text.value = f"Plano atualizado para {selected_plan['name']}!"
             else:
@@ -199,12 +197,15 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             avatar,
             ft.Column([
                 ft.Text(f"Bem-vindo, {username}!", size=24, weight=ft.FontWeight.BOLD),
-                ft.ElevatedButton("Escolher Foto de Perfil", on_click=lambda _: file_picker.pick_files(
-                    allowed_extensions=["png", "jpg", "jpeg"]))
+                ft.ElevatedButton("Mudar avatar", on_click=mudar_perfil)
             ], spacing=10)
         ], alignment=ft.MainAxisAlignment.START),
         ft.Text(f"Email: {current_email}", size=16),
         ft.Text(f"Plano Atual: {current_plan['name']}", size=16),
+        ft.Text(
+            f"Consumo: {usage_data['messages_sent']}/{current_plan['message_limit']} mensagens | {usage_data['pdfs_processed']}/{current_plan['pdf_limit']} PDFs",
+            size=14, color=current_color_scheme.on_surface
+        ),
         ft.Divider(),
         ft.Text("Escolha seu Novo Plano", size=20, weight=ft.FontWeight.BOLD),
         plan_cards,
