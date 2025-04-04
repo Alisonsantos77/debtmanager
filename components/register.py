@@ -138,7 +138,7 @@ def RegisterPage(page: ft.Page):
             }
         ):
             page.client_storage.set("username", username)
-            page.client_storage.set("plan_id", plans_data[plan]["id"])  # Armazena plan_id no client_storage
+            page.client_storage.set("plan_id", plans_data[plan]["id"])
             hide_loading(loading_dialog)
             show_success_and_redirect(
                 "/activation", f"Registro enviado! Código: {activation_code}\nAguarde ativação pelo suporte.")

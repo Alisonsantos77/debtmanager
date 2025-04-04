@@ -12,7 +12,6 @@ from services.pdf_extractor import PDFExtractor
 from utils.message_templates import MessageTemplates
 from utils.supabase_utils import fetch_user_id, fetch_user_data, fetch_plan_data, update_usage_data
 from utils.theme_utils import get_current_color_scheme
-from utils.usage_tracker import UsageTracker
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -51,6 +50,29 @@ class CustomSnackBar(ft.SnackBar):
         self.open = True
         page.update()
 
+# Funções pra gerenciar UsageTracker no Client Storage
+
+
+def get_usage_data(page):
+    prefix = "debtmanager."
+    return {
+        "messages_sent": page.client_storage.get(f"{prefix}messages_sent") or 0,
+        "pdfs_processed": page.client_storage.get(f"{prefix}pdfs_processed") or 0
+    }
+
+
+def increment_usage(page, key, amount=1):
+    prefix = "debtmanager."
+    current_value = page.client_storage.get(f"{prefix}{key}") or 0
+    page.client_storage.set(f"{prefix}{key}", current_value + amount)
+
+
+def check_usage_limits(page, key, message_limit, pdf_limit):
+    prefix = "debtmanager."
+    limits = {"messages_sent": message_limit, "pdfs_processed": pdf_limit}
+    current_value = page.client_storage.get(f"{prefix}{key}") or 0
+    return current_value < limits[key]
+
 
 def create_app_layout(page: ft.Page):
     current_color_scheme = get_current_color_scheme(page)
@@ -64,50 +86,47 @@ def create_app_layout(page: ft.Page):
     last_sent = None
     selected_client = None
 
-    username = page.client_storage.get("username")
+    prefix = "debtmanager."
+    username = page.client_storage.get(f"{prefix}username")
     if not username:
         logger.warning("Username não encontrado no client_storage. Redirecionando para login.")
         CustomSnackBar("Parece que você não tá logado. Vamos pro login!", bgcolor=ft.colors.RED).show(page)
         page.go("/login")
-        return None, {"toggle_theme": lambda: None, "dialogs": {}, "user_plan": "basic", "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "usage_tracker": UsageTracker("basic", "0"), "history": []}
+        return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     user_id = fetch_user_id(username, page)
     if not user_id:
         logger.error(f"User_id não encontrado para {username}. Redirecionando para login.")
         CustomSnackBar("Não achei seu ID. Vamos tentar o login de novo?", bgcolor=ft.colors.RED).show(page)
         page.go("/login")
-        return None, {"toggle_theme": lambda: None, "dialogs": {}, "user_plan": "basic", "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "usage_tracker": UsageTracker("basic", "0"), "history": []}
+        return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     user_data = fetch_user_data(user_id, page)
     if not user_data:
         logger.error(f"Dados do usuário não carregados para {user_id}. Redirecionando para login.")
         CustomSnackBar("Não consegui pegar seus dados. Tenta relogar?", bgcolor=ft.colors.RED).show(page)
         page.go("/login")
-        return None, {"toggle_theme": lambda: None, "dialogs": {}, "user_plan": "basic", "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "usage_tracker": UsageTracker("basic", "0"), "history": []}
+        return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     plan_id = user_data.get("plan_id", 1)
-    plan_data = fetch_plan_data(plan_id, page)
-    if not plan_data:
-        logger.error(f"Dados do plano não carregados para plan_id {plan_id}. Usando padrão 'basic'.")
-        CustomSnackBar("Não achei seu plano. Vou usar o básico por enquanto!", bgcolor=ft.colors.YELLOW_700).show(page)
-        plan_data = {"name": "basic", "message_limit": 100, "pdf_limit": 5}
-
-    user_plan = plan_data.get("name", "basic")
+    plan_data = fetch_plan_data(plan_id, page) or {"name": "basic", "message_limit": 100, "pdf_limit": 5}
+    user_plan = page.client_storage.get(f"{prefix}user_plan") or plan_data.get("name", "basic")
     message_limit = plan_data.get("message_limit", 100)
     pdf_limit = plan_data.get("pdf_limit", 5)
-    messages_sent = user_data.get("messages_sent", 0)
-    pdfs_processed = user_data.get("pdfs_processed", 0)
 
-    usage_tracker = UsageTracker(user_plan, user_id)
-    usage_tracker.usage["messages_sent"] = messages_sent
-    usage_tracker.usage["pdfs_processed"] = pdfs_processed
+    # Sincroniza Client Storage com Supabase ao carregar
+    usage_data = get_usage_data(page)
+    if usage_data["messages_sent"] != user_data.get("messages_sent", 0) or usage_data["pdfs_processed"] != user_data.get("pdfs_processed", 0):
+        page.client_storage.set(f"{prefix}messages_sent", user_data.get("messages_sent", 0))
+        page.client_storage.set(f"{prefix}pdfs_processed", user_data.get("pdfs_processed", 0))
+
     twilio_client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
     support_number = os.getenv("SUPPORT_PHONE")
     if not page.session.contains_key("notified_clients"):
         page.session.set("notified_clients", [])
     message_templates = MessageTemplates()
     usage_display = ft.Text(
-        f"Consumo: {messages_sent}/{message_limit} mensagens | {pdfs_processed}/{pdf_limit} PDFs",
+        f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs",
         size=14, color=current_color_scheme.primary
     )
     message_input = ft.TextField(
@@ -135,9 +154,7 @@ def create_app_layout(page: ft.Page):
                     ft.Text(f"Motivo: {client.reason if hasattr(client, 'reason') else 'Não especificado'}",
                             size=16, color=current_color_scheme_.on_surface),
                 ],
-                spacing=10,
-                scroll=ft.ScrollMode.AUTO,
-                height=300
+                spacing=10, scroll=ft.ScrollMode.AUTO, height=300
             ),
             actions=[ft.TextButton("Fechar", on_click=lambda e: page.close_dialog())],
             actions_alignment=ft.MainAxisAlignment.END
@@ -228,7 +245,7 @@ def create_app_layout(page: ft.Page):
         if not client:
             CustomSnackBar("Nenhum cliente selecionado.", bgcolor=ft.Colors.RED).show(page)
             return
-        if not usage_tracker.check_usage_limits("message"):
+        if not check_usage_limits(page, "messages_sent", message_limit, pdf_limit):
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             await notify_limit_reached("messages")
@@ -244,9 +261,9 @@ def create_app_layout(page: ft.Page):
                                     color=ft.Colors.GREEN if success else ft.Colors.RED)
             page.update()
         if success:
-            usage_tracker.increment_usage("messages_sent")
-            update_usage_data(user_id, usage_tracker.get_usage("messages_sent"),
-                              usage_tracker.get_usage("pdfs_processed"), page)
+            increment_usage(page, "messages_sent")
+            update_usage_data(user_id, page.client_storage.get(
+                f"{prefix}messages_sent"), page.client_storage.get(f"{prefix}pdfs_processed"), page)
             last_sent = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             history.append(type('HistoryEntry', (), {'sent_at': last_sent,
                            'status': 'enviado', 'message': message_body, 'client': client.name})())
@@ -257,8 +274,8 @@ def create_app_layout(page: ft.Page):
                 logger.info(f"Cliente {client.name} notificado e adicionado à lista")
             CustomSnackBar(f"Alerta enviado para {client.name} às {last_sent}!").show(page)
             update_usage_dialog()
-            user_data = fetch_user_data(user_id, page)
-            usage_display.value = f"Consumo: {user_data.get('messages_sent', 0)}/{message_limit} mensagens | {user_data.get('pdfs_processed', 0)}/{pdf_limit} PDFs"
+            usage_data = get_usage_data(page)
+            usage_display.value = f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs"
             usage_display.color = get_current_color_scheme(page).on_surface
             show_message(client)
         else:
@@ -272,13 +289,14 @@ def create_app_layout(page: ft.Page):
             logger.warning("Tentativa de envio em massa sem clientes")
             CustomSnackBar("Nenhum cliente carregado.", bgcolor=ft.Colors.RED).show(page)
             return
-        messages_sent = usage_tracker.get_usage("messages_sent")
-        remaining_messages = message_limit - messages_sent
+        usage_data = get_usage_data(page)
+        remaining_messages = message_limit - usage_data["messages_sent"]
         notified_clients = page.session.get("notified_clients")
         eligible_clients = [c for c in filtered_clients if c.name not in notified_clients]
         clients_to_send = min(len(eligible_clients), remaining_messages)
         if clients_to_send <= 0:
-            logger.info(f"Sem mensagens disponíveis ou todos notificados: {messages_sent}/{message_limit}")
+            logger.info(
+                f"Sem mensagens disponíveis ou todos notificados: {usage_data['messages_sent']}/{message_limit}")
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             await notify_limit_reached("messages")
@@ -326,16 +344,16 @@ def create_app_layout(page: ft.Page):
                 await asyncio.sleep(0.05)
                 page.update()
             last_sent_ = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-            usage_tracker.increment_usage("messages_sent", success_count)
-            update_usage_data(user_id, usage_tracker.get_usage("messages_sent"),
-                              usage_tracker.get_usage("pdfs_processed"), page)
-            user_data = fetch_user_data(user_id, page)
+            increment_usage(page, "messages_sent", success_count)
+            update_usage_data(user_id, page.client_storage.get(
+                f"{prefix}messages_sent"), page.client_storage.get(f"{prefix}pdfs_processed"), page)
+            usage_data = get_usage_data(page)
             feedback_list.controls.append(ft.Text(
                 f"Envio concluído às {last_sent_}! ({success_count}/{total_clients} enviados)", weight=ft.FontWeight.BOLD, color=current_color_scheme.on_surface))
             dialogs["bulk_send_feedback_dialog"].dialog.actions[0].disabled = False
             CustomSnackBar(f"Alertas enviados para {success_count} clientes às {last_sent_}!").show(page)
             update_usage_dialog()
-            usage_display.value = f"Consumo: {user_data.get('messages_sent', 0)}/{message_limit} mensagens | {user_data.get('pdfs_processed', 0)}/{pdf_limit} PDFs"
+            usage_display.value = f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs"
             usage_display.color = get_current_color_scheme(page).on_surface
             messages_view.controls = [ft.Text("Mensagens enviadas com sucesso!",
                                               size=12, color=current_color_scheme.on_surface)]
@@ -353,15 +371,15 @@ def create_app_layout(page: ft.Page):
 
     def update_usage_dialog():
         current_color_scheme_ = get_current_color_scheme(page)
-        user_data = fetch_user_data(user_id, page)
-        usage_info = f"Mensagens Enviadas: {user_data.get('messages_sent', 0)}/{message_limit}\nPDFs Processados: {user_data.get('pdfs_processed', 0)}/{pdf_limit}"
+        usage_data = get_usage_data(page)
+        usage_info = f"Mensagens Enviadas: {usage_data['messages_sent']}/{message_limit}\nPDFs Processados: {usage_data['pdfs_processed']}/{pdf_limit}"
         dialogs["usage_dialog"].dialog.content = ft.Text(usage_info, size=16, color=current_color_scheme_.on_surface)
         dialogs["usage_dialog"].dialog.title = ft.Text("Limite atingido!", size=20, weight=ft.FontWeight.BOLD)
         dialogs["usage_dialog"].dialog.actions = [ft.TextButton(
             "Fechar", on_click=lambda e: dialogs["usage_dialog"].close_dialog())]
         page.update()
 
-    dialogs = create_dialogs(page, message_input, bulk_message_input, message_templates, usage_tracker,
+    dialogs = create_dialogs(page, message_input, bulk_message_input, message_templates, None,
                              clients_list, filtered_clients, send_bulk_message, selected_client, update_client_list)
 
     def show_loading():
@@ -387,8 +405,8 @@ def create_app_layout(page: ft.Page):
         if not e.files:
             logger.warning("Nenhum arquivo selecionado")
             return
-        if not usage_tracker.check_usage_limits("pdf"):
-            logger.info(f"Limite de PDFs excedido: {usage_tracker.get_usage('pdfs_processed')}/{pdf_limit}")
+        if not check_usage_limits(page, "pdfs_processed", message_limit, pdf_limit):
+            logger.info(f"Limite de PDFs excedido: {get_usage_data(page)['pdfs_processed']}/{pdf_limit}")
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             page.run_task(notify_limit_reached, "pdfs")
@@ -408,10 +426,9 @@ def create_app_layout(page: ft.Page):
         current_page = 0
         client_list_view.controls.clear()
         messages_view.controls.clear()
-        usage_tracker.increment_usage("pdfs_processed")
-        update_usage_data(user_id, usage_tracker.get_usage("messages_sent"),
-                          usage_tracker.get_usage("pdfs_processed"), page)
-        user_data = fetch_user_data(user_id, page)
+        increment_usage(page, "pdfs_processed")
+        update_usage_data(user_id, page.client_storage.get(
+            f"{prefix}messages_sent"), page.client_storage.get(f"{prefix}pdfs_processed"), page)
         update_client_list()
         message_manager.generate_notifications(clients_list)
         current_color_scheme_ = get_current_color_scheme(page)
@@ -425,7 +442,8 @@ def create_app_layout(page: ft.Page):
             hide_dialog(success_dialog)
         page.run_task(delay_and_hide)
         CustomSnackBar("Dados carregados com sucesso!").show(page)
-        usage_display.value = f"Consumo: {user_data.get('messages_sent', 0)}/{message_limit} mensagens | {user_data.get('pdfs_processed', 0)}/{pdf_limit} PDFs"
+        usage_data = get_usage_data(page)
+        usage_display.value = f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs"
         usage_display.color = current_color_scheme_.on_surface
         page.update()
 
@@ -456,4 +474,4 @@ def create_app_layout(page: ft.Page):
         create_clients_page(clients_list, filtered_clients, current_page, client_list_view,
                             messages_view, last_sent, dialogs, page, update_client_list)
     ], expand=True, alignment=ft.MainAxisAlignment.CENTER)
-    return layout, {"toggle_theme": toggle_theme, "dialogs": dialogs, "user_plan": user_plan, "clients_list": clients_list, "filtered_clients": filtered_clients, "update_client_list": update_client_list, "usage_tracker": usage_tracker, "history": history}
+    return layout, {"toggle_theme": toggle_theme, "dialogs": dialogs, "clients_list": clients_list, "filtered_clients": filtered_clients, "update_client_list": update_client_list, "history": history}

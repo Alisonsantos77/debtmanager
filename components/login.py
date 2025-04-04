@@ -1,7 +1,7 @@
 from time import sleep
 import flet as ft
 import logging
-from utils.supabase_utils import validate_user, fetch_user_id
+from utils.supabase_utils import validate_user, fetch_user_id, fetch_user_data, fetch_plan_data
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
@@ -71,11 +71,19 @@ def LoginPage(page: ft.Page):
         if status == "ativo" and user:
             user_id = fetch_user_id(username, page)
             if user_id:
-                page.client_storage.set("username", username)
-                page.client_storage.set("user_id", user_id)
-                page.client_storage.set("session_expiry", (datetime.now(
+                prefix = "debtmanager."
+                user_data = fetch_user_data(user_id, page)
+                plan_id = user_data.get("plan_id", 1)
+                plan_data = fetch_plan_data(plan_id, page) or {"name": "basic"}
+                # Seta tudo no Client Storage
+                page.client_storage.set(f"{prefix}username", username)
+                page.client_storage.set(f"{prefix}user_id", user_id)
+                page.client_storage.set(f"{prefix}session_expiry", (datetime.now(
                     timezone.utc) + timedelta(hours=24)).isoformat())
-                logger.info(f"Login bem-sucedido para {username}. Username e user_id salvos no client_storage.")
+                page.client_storage.set(f"{prefix}user_plan", plan_data.get("name", "basic"))
+                page.client_storage.set(f"{prefix}messages_sent", user_data.get("messages_sent", 0))
+                page.client_storage.set(f"{prefix}pdfs_processed", user_data.get("pdfs_processed", 0))
+                logger.info(f"Login bem-sucedido para {username}. Dados salvos no client_storage.")
                 hide_loading(loading_dialog)
                 show_success_and_redirect("/clients", "Bem-vindo de volta!")
             else:

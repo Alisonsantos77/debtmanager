@@ -1,7 +1,7 @@
 from time import sleep
 import flet as ft
 import logging
-from utils.supabase_utils import validate_user, update_user_status
+from utils.supabase_utils import validate_user, update_user_status, fetch_user_id, fetch_user_data, fetch_plan_data
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
@@ -69,12 +69,20 @@ def ActivationPage(page: ft.Page):
             now = datetime.now(timezone.utc)
             session_expiry = now + timedelta(hours=24)
             update_user_status(username, "ativo", {"data_expiracao": (now + timedelta(days=30)).isoformat()}, page)
-            page.client_storage.set("username", username)
-            page.client_storage.set("user_id", user["id"])
-            page.client_storage.set("session_expiry", session_expiry.isoformat())
+            user_id = fetch_user_id(username, page)
+            user_data = fetch_user_data(user_id, page)
+            plan_id = user_data.get("plan_id", 1)
+            plan_data = fetch_plan_data(plan_id, page) or {"name": "basic"}
+            prefix = "debtmanager."
+            page.client_storage.set(f"{prefix}username", username)
+            page.client_storage.set(f"{prefix}user_id", user_id)
+            page.client_storage.set(f"{prefix}session_expiry", session_expiry.isoformat())
+            page.client_storage.set(f"{prefix}user_plan", plan_data.get("name", "basic"))
+            page.client_storage.set(f"{prefix}messages_sent", user_data.get("messages_sent", 0))
+            page.client_storage.set(f"{prefix}pdfs_processed", user_data.get("pdfs_processed", 0))
             logger.info(f"Conta ativada para {username}. Dados salvos no client_storage.")
             hide_loading(loading_dialog)
-            show_success_and_redirect ("/clients", "Conta ativada! Bem-vindo!")
+            show_success_and_redirect("/clients", "Conta ativada! Bem-vindo!")
         elif status == "ativo" and user:
             hide_loading(loading_dialog)
             status_text.value = "Conta já ativada."

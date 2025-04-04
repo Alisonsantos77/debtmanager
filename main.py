@@ -52,6 +52,7 @@ def verificar_status_usuario(page):
 
 
 def main(page: ft.Page):
+    # page.client_storage.clear()
     cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF",
                    "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}
     cores_dark = {"primary": "#60A5FA", "on_primary": "#1E3A8A",
@@ -71,7 +72,6 @@ def main(page: ft.Page):
             verificar_status_usuario(page)
             page.update()
 
-    layout, app_state = create_app_layout(page)
     company_data = {
         "name": "DebtManager",
         "logo": "https://picsum.photos/150",
@@ -80,10 +80,10 @@ def main(page: ft.Page):
         "secret_key": os.getenv("MY_APP_SECRET_KEY")
     }
 
-    usage_tracker = app_state["usage_tracker"]
-    usage_tracker.usage["messages_sent"] = page.client_storage.get("debtmanager.messages_sent") or 0
+    app_state = {}
 
-    setup_routes(page, layout, app_state, app_state, company_data)
+    # Configura as rotas
+    setup_routes(page, None, None, app_state, company_data)
     page.on_app_lifecycle_state_change = handle_lifecycle_change
 
     verificar_status_usuario(page)
@@ -95,4 +95,4 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     os.environ["FLET_LOG_LEVEL"] = "info"
-    ft.app(target=main)
+    ft.app(target=main, assets_dir="assets", upload_dir="uploads")

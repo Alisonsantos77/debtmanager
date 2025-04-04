@@ -1,7 +1,5 @@
 import logging
-
 import flet as ft
-
 from components.activation import ActivationPage
 from components.client_details import create_client_details_page
 from components.dashboard import create_dashboard_page
@@ -9,6 +7,7 @@ from components.login import LoginPage
 from components.navigation_drawer import create_drawer
 from components.profile_page import ProfilePage
 from components.register import RegisterPage
+from components.app_layout import create_app_layout
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
 
@@ -17,18 +16,17 @@ logger = logging.getLogger(__name__)
 
 def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: dict):
     current_color_scheme = get_current_color_scheme(page)
-    saved_avatar = page.client_storage.get("user_avatar")
-    username = page.client_storage.get("username")
+    prefix = "debtmanager."
+    saved_avatar = page.client_storage.get(f"{prefix}user_avatar")
+    username = page.client_storage.get(f"{prefix}username")
 
     def logout(e):
-        page.client_storage.clear()
-        app_state["usage_tracker"] = None
-        logger.info("Usuário deslogado")
+        page.client_storage.clear()  
+        logger.info("Usuário deslogado e Client Storage limpo")
         page.go("/login")
         page.update()
 
     def route_change(route):
-
         company_data.update({
             "name": company_data.get("name", "DebtManager"),
             "logo": company_data.get("logo", "https://picsum.photos/150"),
@@ -41,7 +39,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             def __init__(self, title):
                 super().__init__(
                     title=ft.Text(
-                        f"{username} - {title}",
+                        f"{username} - {title}" if username else title,
                         size=20,
                         weight=ft.FontWeight.BOLD,
                         color=current_color_scheme.primary
@@ -75,7 +73,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                 ft.PopupMenuItem(
                                     text="Alterar Tema",
                                     icon=ft.Icons.WB_SUNNY_OUTLINED,
-                                    on_click=lambda e: layout_data["toggle_theme"](),
+                                    on_click=lambda e: app_state.get("toggle_theme", lambda: None)()
                                 ),
                                 ft.PopupMenuItem(
                                     text="Sair",
@@ -96,16 +94,22 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             ))
 
         if page.route == "/clients":
-            page.title = "Clientes"
-            page.views.append(
-                ft.View(
-                    route="/clients",
-                    drawer=create_drawer(page, company_data),
-                    appbar=create_appbar("Clientes"),
-                    controls=[layout],
-                    scroll=ft.ScrollMode.HIDDEN,
+            # Cria o layout dinamicamente quando a rota é /clients
+            layout, app_state_new = create_app_layout(page)
+            app_state.update(app_state_new)  # Atualiza o app_state com os novos dados
+            if layout is None:
+                page.go("/login") 
+            else:
+                page.title = "Clientes"
+                page.views.append(
+                    ft.View(
+                        route="/clients",
+                        drawer=create_drawer(page, company_data),
+                        appbar=create_appbar("Clientes"),
+                        controls=[layout],
+                        scroll=ft.ScrollMode.HIDDEN,
+                    )
                 )
-            )
         elif page.route == "/register":
             page.title = "Registro"
             page.views.append(
@@ -136,7 +140,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     route="/dashboard",
                     drawer=create_drawer(page, company_data),
                     appbar=create_appbar("Dashboard"),
-                    controls=[create_dashboard_page(layout_data["clients_list"], layout_data["history"], page)],
+                    controls=[create_dashboard_page(app_state.get("clients_list", []),
+                                                    app_state.get("history", []), page)],
                     scroll=ft.ScrollMode.HIDDEN
                 )
             )

@@ -11,7 +11,6 @@ def create_drawer(page: ft.Page, company_data: dict):
     def handle_drawer_change(e, page):
         """Gerencia a mudança de seleção no drawer."""
         selected_index = e.control.selected_index
-        # Substituído print por logging
         logger.info(f"Drawer selecionado: {selected_index}")
 
         if selected_index == 0:
