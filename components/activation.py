@@ -3,7 +3,7 @@ import flet as ft
 import logging
 from utils.supabase_utils import validate_user, update_user_status, fetch_user_id, fetch_user_data, fetch_plan_data
 from datetime import datetime, timezone, timedelta
-
+import os
 logger = logging.getLogger(__name__)
 
 
@@ -13,6 +13,7 @@ def ActivationPage(page: ft.Page):
     status_text = ft.Text("", color=ft.Colors.RED)
     activate_button = ft.ElevatedButton("Ativar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
     login_button = ft.TextButton("Acessar", on_click=lambda _: page.go("/login"))
+    prefix = os.getenv("PREFIX")
 
     def show_success_and_redirect(route, message="Sucesso!"):
         success_dialog = ft.AlertDialog(
@@ -73,7 +74,7 @@ def ActivationPage(page: ft.Page):
             user_data = fetch_user_data(user_id, page)
             plan_id = user_data.get("plan_id", 1)
             plan_data = fetch_plan_data(plan_id, page) or {"name": "basic"}
-            prefix = "debtmanager."
+        
             page.client_storage.set(f"{prefix}username", username)
             page.client_storage.set(f"{prefix}user_id", user_id)
             page.client_storage.set(f"{prefix}session_expiry", session_expiry.isoformat())

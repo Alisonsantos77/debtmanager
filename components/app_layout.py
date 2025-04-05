@@ -50,28 +50,13 @@ class CustomSnackBar(ft.SnackBar):
         self.open = True
         page.update()
 
-# Funções pra gerenciar UsageTracker no Client Storage
-
 
 def get_usage_data(page):
-    prefix = "debtmanager."
+    prefix = os.getenv("PREFIX")
     return {
         "messages_sent": page.client_storage.get(f"{prefix}messages_sent") or 0,
         "pdfs_processed": page.client_storage.get(f"{prefix}pdfs_processed") or 0
     }
-
-
-def increment_usage(page, key, amount=1):
-    prefix = "debtmanager."
-    current_value = page.client_storage.get(f"{prefix}{key}") or 0
-    page.client_storage.set(f"{prefix}{key}", current_value + amount)
-
-
-def check_usage_limits(page, key, message_limit, pdf_limit):
-    prefix = "debtmanager."
-    limits = {"messages_sent": message_limit, "pdfs_processed": pdf_limit}
-    current_value = page.client_storage.get(f"{prefix}{key}") or 0
-    return current_value < limits[key]
 
 
 def create_app_layout(page: ft.Page):
@@ -114,11 +99,15 @@ def create_app_layout(page: ft.Page):
     message_limit = plan_data.get("message_limit", 100)
     pdf_limit = plan_data.get("pdf_limit", 5)
 
-    # Sincroniza Client Storage com Supabase ao carregar
     usage_data = get_usage_data(page)
+    local_messages_sent = usage_data["messages_sent"]
+    local_pdfs_processed = usage_data["pdfs_processed"]
+
     if usage_data["messages_sent"] != user_data.get("messages_sent", 0) or usage_data["pdfs_processed"] != user_data.get("pdfs_processed", 0):
         page.client_storage.set(f"{prefix}messages_sent", user_data.get("messages_sent", 0))
         page.client_storage.set(f"{prefix}pdfs_processed", user_data.get("pdfs_processed", 0))
+        local_messages_sent = user_data.get("messages_sent", 0)
+        local_pdfs_processed = user_data.get("pdfs_processed", 0)
 
     twilio_client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
     support_number = os.getenv("SUPPORT_PHONE")
@@ -126,7 +115,7 @@ def create_app_layout(page: ft.Page):
         page.session.set("notified_clients", [])
     message_templates = MessageTemplates()
     usage_display = ft.Text(
-        f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs",
+        f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs",
         size=14, color=current_color_scheme.primary
     )
     message_input = ft.TextField(
@@ -139,6 +128,13 @@ def create_app_layout(page: ft.Page):
         hint_text="Use {name}, {debt_amount}, {due_date}, {reason}", color=current_color_scheme.on_surface
     )
     history = []
+
+    def sync_usage():
+        nonlocal local_messages_sent, local_pdfs_processed
+        page.client_storage.set(f"{prefix}messages_sent", local_messages_sent)
+        page.client_storage.set(f"{prefix}pdfs_processed", local_pdfs_processed)
+
+    page.on_close = lambda e: sync_usage()
 
     def show_client_details(client):
         current_color_scheme_ = get_current_color_scheme(page)
@@ -240,12 +236,24 @@ def create_app_layout(page: ft.Page):
         twilio_client.messages.create(body=message, from_=os.getenv("TWILIO_WHATSAPP_NUMBER"), to=support_number)
         logger.info(f"Notificação de limite enviada: {limit_type} para {support_number}")
 
+    def check_usage_limits(key):
+        limits = {"messages_sent": message_limit, "pdfs_processed": pdf_limit}
+        current_value = local_messages_sent if key == "messages_sent" else local_pdfs_processed
+        return current_value < limits[key]
+
+    def increment_usage(key, amount=1):
+        nonlocal local_messages_sent, local_pdfs_processed
+        if key == "messages_sent":
+            local_messages_sent += amount
+        elif key == "pdfs_processed":
+            local_pdfs_processed += amount
+
     async def send_single_alert(client):
-        nonlocal last_sent
+        nonlocal last_sent, local_messages_sent
         if not client:
             CustomSnackBar("Nenhum cliente selecionado.", bgcolor=ft.Colors.RED).show(page)
             return
-        if not check_usage_limits(page, "messages_sent", message_limit, pdf_limit):
+        if not check_usage_limits("messages_sent"):
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             await notify_limit_reached("messages")
@@ -261,9 +269,7 @@ def create_app_layout(page: ft.Page):
                                     color=ft.Colors.GREEN if success else ft.Colors.RED)
             page.update()
         if success:
-            increment_usage(page, "messages_sent")
-            update_usage_data(user_id, page.client_storage.get(
-                f"{prefix}messages_sent"), page.client_storage.get(f"{prefix}pdfs_processed"), page)
+            increment_usage("messages_sent")
             last_sent = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             history.append(type('HistoryEntry', (), {'sent_at': last_sent,
                            'status': 'enviado', 'message': message_body, 'client': client.name})())
@@ -274,10 +280,10 @@ def create_app_layout(page: ft.Page):
                 logger.info(f"Cliente {client.name} notificado e adicionado à lista")
             CustomSnackBar(f"Alerta enviado para {client.name} às {last_sent}!").show(page)
             update_usage_dialog()
-            usage_data = get_usage_data(page)
-            usage_display.value = f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs"
+            usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
             usage_display.color = get_current_color_scheme(page).on_surface
             show_message(client)
+            update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
         else:
             CustomSnackBar("Erro ao enviar mensagem.", bgcolor=ft.Colors.RED).show(page)
             dialogs["error_dialog"].open_dialog()
@@ -289,14 +295,13 @@ def create_app_layout(page: ft.Page):
             logger.warning("Tentativa de envio em massa sem clientes")
             CustomSnackBar("Nenhum cliente carregado.", bgcolor=ft.Colors.RED).show(page)
             return
-        usage_data = get_usage_data(page)
-        remaining_messages = message_limit - usage_data["messages_sent"]
+        remaining_messages = message_limit - local_messages_sent
         notified_clients = page.session.get("notified_clients")
         eligible_clients = [c for c in filtered_clients if c.name not in notified_clients]
         clients_to_send = min(len(eligible_clients), remaining_messages)
         if clients_to_send <= 0:
             logger.info(
-                f"Sem mensagens disponíveis ou todos notificados: {usage_data['messages_sent']}/{message_limit}")
+                f"Sem mensagens disponíveis ou todos notificados: {local_messages_sent}/{message_limit}")
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             await notify_limit_reached("messages")
@@ -344,16 +349,13 @@ def create_app_layout(page: ft.Page):
                 await asyncio.sleep(0.05)
                 page.update()
             last_sent_ = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-            increment_usage(page, "messages_sent", success_count)
-            update_usage_data(user_id, page.client_storage.get(
-                f"{prefix}messages_sent"), page.client_storage.get(f"{prefix}pdfs_processed"), page)
-            usage_data = get_usage_data(page)
+            increment_usage("messages_sent", success_count)
             feedback_list.controls.append(ft.Text(
                 f"Envio concluído às {last_sent_}! ({success_count}/{total_clients} enviados)", weight=ft.FontWeight.BOLD, color=current_color_scheme.on_surface))
             dialogs["bulk_send_feedback_dialog"].dialog.actions[0].disabled = False
             CustomSnackBar(f"Alertas enviados para {success_count} clientes às {last_sent_}!").show(page)
             update_usage_dialog()
-            usage_display.value = f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs"
+            usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
             usage_display.color = get_current_color_scheme(page).on_surface
             messages_view.controls = [ft.Text("Mensagens enviadas com sucesso!",
                                               size=12, color=current_color_scheme.on_surface)]
@@ -361,6 +363,7 @@ def create_app_layout(page: ft.Page):
                 logger.info(f"{len(eligible_clients) - clients_to_send} clientes não enviados por limite")
                 feedback_list.controls.append(ft.Text(
                     f"Nota: {len(eligible_clients) - clients_to_send} clientes excederam o limite.", color=current_color_scheme.on_surface))
+            update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
         except Exception as e:
             logger.error(f"Erro no envio em massa: {e}")
             feedback_list.controls.append(ft.Text(f"Erro: {str(e)}", color=ft.Colors.RED))
@@ -371,8 +374,7 @@ def create_app_layout(page: ft.Page):
 
     def update_usage_dialog():
         current_color_scheme_ = get_current_color_scheme(page)
-        usage_data = get_usage_data(page)
-        usage_info = f"Mensagens Enviadas: {usage_data['messages_sent']}/{message_limit}\nPDFs Processados: {usage_data['pdfs_processed']}/{pdf_limit}"
+        usage_info = f"Mensagens Enviadas: {local_messages_sent}/{message_limit}\nPDFs Processados: {local_pdfs_processed}/{pdf_limit}"
         dialogs["usage_dialog"].dialog.content = ft.Text(usage_info, size=16, color=current_color_scheme_.on_surface)
         dialogs["usage_dialog"].dialog.title = ft.Text("Limite atingido!", size=20, weight=ft.FontWeight.BOLD)
         dialogs["usage_dialog"].dialog.actions = [ft.TextButton(
@@ -401,12 +403,12 @@ def create_app_layout(page: ft.Page):
         page.update()
 
     def process_pdf(e: ft.FilePickerResultEvent):
-        nonlocal clients_list, filtered_clients, selected_client, current_page
+        nonlocal clients_list, filtered_clients, selected_client, current_page, local_pdfs_processed
         if not e.files:
             logger.warning("Nenhum arquivo selecionado")
             return
-        if not check_usage_limits(page, "pdfs_processed", message_limit, pdf_limit):
-            logger.info(f"Limite de PDFs excedido: {get_usage_data(page)['pdfs_processed']}/{pdf_limit}")
+        if not check_usage_limits("pdfs_processed"):
+            logger.info(f"Limite de PDFs excedido: {local_pdfs_processed}/{pdf_limit}")
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             page.run_task(notify_limit_reached, "pdfs")
@@ -426,9 +428,8 @@ def create_app_layout(page: ft.Page):
         current_page = 0
         client_list_view.controls.clear()
         messages_view.controls.clear()
-        increment_usage(page, "pdfs_processed")
-        update_usage_data(user_id, page.client_storage.get(
-            f"{prefix}messages_sent"), page.client_storage.get(f"{prefix}pdfs_processed"), page)
+        increment_usage("pdfs_processed")
+        update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
         update_client_list()
         message_manager.generate_notifications(clients_list)
         current_color_scheme_ = get_current_color_scheme(page)
@@ -442,8 +443,7 @@ def create_app_layout(page: ft.Page):
             hide_dialog(success_dialog)
         page.run_task(delay_and_hide)
         CustomSnackBar("Dados carregados com sucesso!").show(page)
-        usage_data = get_usage_data(page)
-        usage_display.value = f"Consumo: {usage_data['messages_sent']}/{message_limit} mensagens | {usage_data['pdfs_processed']}/{pdf_limit} PDFs"
+        usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
         usage_display.color = current_color_scheme_.on_surface
         page.update()
 

@@ -1,3 +1,4 @@
+import os
 import flet as ft
 import smtplib
 from email.mime.text import MIMEText
@@ -5,7 +6,7 @@ from utils.supabase_utils import read_supabase, write_supabase
 from utils.theme_utils import get_current_color_scheme
 from secrets import token_urlsafe
 import logging
-import os
+import random
 from dotenv import load_dotenv
 import base64
 from components.app_layout import get_usage_data  # Importa pra usar o Client Storage
@@ -41,7 +42,7 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     current_color_scheme = get_current_color_scheme(page)
     avatar_img = ft.Ref[ft.CircleAvatar]()
 
-    prefix = "debtmanager."
+    prefix = os.getenv("PREFIX")
     username = page.client_storage.get(f"{prefix}username") or "Debt Manager"
     user_id = page.client_storage.get(f"{prefix}user_id")
     if not username or not user_id:
@@ -78,6 +79,8 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         [
             ft.CircleAvatar(
                 foreground_image_src=f"{URL_DICEBEAR}seed={username}",
+                width=40,
+                height=40,
                 ref=avatar_img,
             ),
             ft.Container(
@@ -90,10 +93,14 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     )
 
     def mudar_perfil(e):
-        novo_avatar = f"{URL_DICEBEAR}seed={username}"
-        avatar_img.current.value = novo_avatar
+        avatar_aleatorio = f"{URL_DICEBEAR}seed={random.randint(1000, 9999)}"
+        novo_avatar = avatar_aleatorio if avatar_aleatorio else f"{URL_DICEBEAR}seed={username}"
+        avatar_img.current.foreground_image_src = novo_avatar
+        avatar_img.current.update()
         page.client_storage.set(f"{prefix}avatar", novo_avatar)
         page.update()
+
+
 
     def send_upgrade_request(username, email, current_plan, new_plan, code):
         current_info = next(p for p in plans_data if p["name"] == current_plan)
@@ -128,8 +135,8 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         upgrade_code = token_urlsafe(16)
         write_supabase(
             "upgrade_requests",
-            {"user_id": user_id, "plan_id": next(
-                p["id"] for p in plans_data if p["name"] == new_plan), "code": upgrade_code, "status": "pending"},
+            {"user_id": user_id, "plan_id": next(p["id"] for p in plans_data if p["name"] == new_plan),
+             "code": upgrade_code, "status": "pending"},
             page=page
         )
         send_upgrade_request(username, current_email, current_plan["name"], new_plan, upgrade_code)
@@ -155,9 +162,11 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                 page.client_storage.set(f"{prefix}messages_sent", 0)
                 page.client_storage.set(f"{prefix}pdfs_processed", 0)
                 write_supabase(f"users_debt?id=eq.{user_id}", {
-                    "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0}, method="patch", page=page)
+                    "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0
+                }, method="patch", page=page)
                 write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {
-                               "status": "approved"}, method="patch", page=page)
+                    "status": "approved"
+                }, method="patch", page=page)
                 page.client_storage.set(f"{prefix}user_plan", selected_plan["name"])
                 app_state["user_plan"] = selected_plan["name"]
                 feedback_text.value = f"Plano atualizado para {selected_plan['name']}!"
@@ -180,14 +189,22 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
 
     social_icons = ft.Row(
         controls=[
-            ft.IconButton(content=ft.Image(src="images/contact/icons8-whatsapp-48.png", width=40, height=40), icon_color=ft.Colors.GREEN, tooltip="Abrir WhatsApp",
-                          url="https://wa.link/oebrg2", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREEN})),
-            ft.IconButton(content=ft.Image(src="images/contact/outlook-logo.png", width=40, height=40), icon_color=ft.Colors.PRIMARY, tooltip="Enviar Email",
-                          url="mailto:Alisondev77@hotmail.com?subject=Feedback%20-%20DebtManager&body=Olá, gostaria de fornecer feedback.", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
-            ft.IconButton(content=ft.Image(src="images/contact/icons8-linkedin-48.png", width=40, height=40), tooltip="Acessar LinkedIn",
-                          url="https://www.linkedin.com/in/alisonsantosdev", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
-            ft.IconButton(content=ft.Image(src="images/contact/icons8-github-64.png", width=40, height=40), icon_color=ft.Colors.PRIMARY, tooltip="Acessar GitHub",
-                          url="https://github.com/Alisonsantos77", style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREY})),
+            ft.IconButton(content=ft.Image(src="images/contact/icons8-whatsapp-48.png", width=40, height=40),
+                          icon_color=ft.Colors.GREEN, tooltip="Abrir WhatsApp",
+                          url="https://wa.link/oebrg2",
+                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREEN})),
+            ft.IconButton(content=ft.Image(src="images/contact/outlook-logo.png", width=40, height=40),
+                          icon_color=ft.Colors.PRIMARY, tooltip="Enviar Email",
+                          url="mailto:Alisondev77@hotmail.com?subject=Feedback%20-%20DebtManager&body=Olá, gostaria de fornecer feedback.",
+                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
+            ft.IconButton(content=ft.Image(src="images/contact/icons8-linkedin-48.png", width=40, height=40),
+                          tooltip="Acessar LinkedIn",
+                          url="https://www.linkedin.com/in/alisonsantosdev",
+                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
+            ft.IconButton(content=ft.Image(src="images/contact/icons8-github-64.png", width=40, height=40),
+                          icon_color=ft.Colors.PRIMARY, tooltip="Acessar GitHub",
+                          url="https://github.com/Alisonsantos77",
+                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREY})),
         ],
         alignment=ft.MainAxisAlignment.SPACE_AROUND,
     )

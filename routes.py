@@ -10,16 +10,16 @@ from components.register import RegisterPage
 from components.app_layout import create_app_layout
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
-
+import os
 logger = logging.getLogger(__name__)
 
 
 def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: dict):
     current_color_scheme = get_current_color_scheme(page)
-    prefix = "debtmanager."
-    saved_avatar = page.client_storage.get(f"{prefix}user_avatar")
+    prefix = os.getenv("PREFIX")
+    saved_avatar = page.client_storage.get(f"{prefix}avatar")
     username = page.client_storage.get(f"{prefix}username")
-
+    URL_DICEBEAR = os.getenv("URL_DICEBEAR")
     def logout(e):
         page.client_storage.clear()  
         logger.info("Usuário deslogado e Client Storage limpo")
@@ -54,7 +54,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                             content=ft.Stack(
                                 [
                                     ft.CircleAvatar(
-                                        foreground_image_src=saved_avatar if saved_avatar else "https://picsum.photos/150",
+                                        foreground_image_src=saved_avatar if saved_avatar else f"{URL_DICEBEAR}seed={username}",
                                     ),
                                     ft.Container(
                                         content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),

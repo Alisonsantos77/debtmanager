@@ -1,3 +1,4 @@
+import os
 from time import sleep
 import flet as ft
 import logging
@@ -71,7 +72,7 @@ def LoginPage(page: ft.Page):
         if status == "ativo" and user:
             user_id = fetch_user_id(username, page)
             if user_id:
-                prefix = "debtmanager."
+                prefix = os.getenv("PREFIX")
                 user_data = fetch_user_data(user_id, page)
                 plan_id = user_data.get("plan_id", 1)
                 plan_data = fetch_plan_data(plan_id, page) or {"name": "basic"}

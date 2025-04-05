@@ -1,12 +1,10 @@
 import logging
 import os
 import time
-from datetime import datetime, timezone
 
 import flet as ft
 import requests
 
-from components.app_layout import create_app_layout
 from routes import setup_routes
 
 logging.basicConfig(
