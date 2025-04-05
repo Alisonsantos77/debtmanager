@@ -1,9 +1,12 @@
-import os
-from time import sleep
-import flet as ft
 import logging
-from utils.supabase_utils import validate_user, fetch_user_id, fetch_user_data, fetch_plan_data
-from datetime import datetime, timezone, timedelta
+import os
+from datetime import datetime, timedelta, timezone
+from time import sleep
+
+import flet as ft
+
+from utils.supabase_utils import (fetch_plan_data, fetch_user_data,
+                                  fetch_user_id, validate_user)
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,7 @@ def LoginPage(page: ft.Page):
     status_text = ft.Text("", color=ft.Colors.RED)
     login_button = ft.ElevatedButton("Entrar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
     register_button = ft.TextButton("Cadastrar", on_click=lambda _: page.go("/register"))
-    activate_button = ft.TextButton("Ativar Conta", on_click=lambda _: page.go("/activate"))
+    activate_button = ft.TextButton("Ativar Conta", on_click=lambda _: page.go("/activation"))
 
     def show_success_and_redirect(route, message="Sucesso!"):
         success_dialog = ft.AlertDialog(
@@ -125,4 +128,4 @@ def LoginPage(page: ft.Page):
     )
     page.update()
 
-    return ft.Container(content=form_card, alignment=ft.alignment.center, expand=True)
+    return ft.Container(content=form_card)

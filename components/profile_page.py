@@ -45,6 +45,7 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     prefix = os.getenv("PREFIX")
     username = page.client_storage.get(f"{prefix}username") or "Debt Manager"
     user_id = page.client_storage.get(f"{prefix}user_id")
+    saved_avatar = page.client_storage.get(f"{prefix}avatar")
     if not username or not user_id:
         logger.warning("Username ou user_id não encontrados no client_storage. Redirecionando para login.")
         page.overlay.append(ft.SnackBar(
@@ -78,9 +79,9 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     avatar = ft.Stack(
         [
             ft.CircleAvatar(
-                foreground_image_src=f"{URL_DICEBEAR}seed={username}",
-                width=40,
-                height=40,
+                foreground_image_src=saved_avatar if saved_avatar else f"{URL_DICEBEAR}seed={username}",
+                width=80,
+                height=80,
                 ref=avatar_img,
             ),
             ft.Container(
@@ -88,8 +89,8 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                 alignment=ft.alignment.bottom_left,
             ),
         ],
-        width=40,
-        height=40,
+        width=50,
+        height=50,
     )
 
     def mudar_perfil(e):

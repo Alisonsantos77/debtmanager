@@ -1,9 +1,14 @@
-from time import sleep
-import flet as ft
 import logging
-from utils.supabase_utils import validate_user, update_user_status, fetch_user_id, fetch_user_data, fetch_plan_data
-from datetime import datetime, timezone, timedelta
 import os
+from datetime import datetime, timedelta, timezone
+from time import sleep
+
+import flet as ft
+
+from utils.supabase_utils import (fetch_plan_data, fetch_user_data,
+                                  fetch_user_id, update_user_status,
+                                  validate_user)
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +79,7 @@ def ActivationPage(page: ft.Page):
             user_data = fetch_user_data(user_id, page)
             plan_id = user_data.get("plan_id", 1)
             plan_data = fetch_plan_data(plan_id, page) or {"name": "basic"}
-        
+
             page.client_storage.set(f"{prefix}username", username)
             page.client_storage.set(f"{prefix}user_id", user_id)
             page.client_storage.set(f"{prefix}session_expiry", session_expiry.isoformat())
@@ -118,4 +123,4 @@ def ActivationPage(page: ft.Page):
     )
     page.update()
 
-    return ft.Container(content=form_card, alignment=ft.alignment.center, expand=True)
+    return ft.Container(content=form_card)

@@ -46,15 +46,17 @@ def create_drawer(page: ft.Page, company_data: dict):
                     [
                         ft.CircleAvatar(
                             foreground_image_src=saved_avatar if saved_avatar else f"{URL_DICEBEAR}seed={username}",
-                            ref=avatar_img
+                            ref=avatar_img,
+                            width=60,
+                            height=60,
                         ),
                         ft.Container(
                             content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
                             alignment=ft.alignment.bottom_left,
                         ),
                     ],
-                    width=40,
-                    height=40,
+                    width=50,
+                    height=50,
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,

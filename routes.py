@@ -1,16 +1,19 @@
 import logging
+import os
+
 import flet as ft
+
 from components.activation import ActivationPage
+from components.app_layout import create_app_layout
 from components.client_details import create_client_details_page
 from components.dashboard import create_dashboard_page
 from components.login import LoginPage
 from components.navigation_drawer import create_drawer
 from components.profile_page import ProfilePage
 from components.register import RegisterPage
-from components.app_layout import create_app_layout
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
-import os
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,8 +23,9 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
     saved_avatar = page.client_storage.get(f"{prefix}avatar")
     username = page.client_storage.get(f"{prefix}username")
     URL_DICEBEAR = os.getenv("URL_DICEBEAR")
+
     def logout(e):
-        page.client_storage.clear()  
+        page.client_storage.clear()
         logger.info("Usuário deslogado e Client Storage limpo")
         page.go("/login")
         page.update()
@@ -55,14 +59,16 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                 [
                                     ft.CircleAvatar(
                                         foreground_image_src=saved_avatar if saved_avatar else f"{URL_DICEBEAR}seed={username}",
+                                        width=45,
+                                        height=45,
                                     ),
                                     ft.Container(
                                         content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
                                         alignment=ft.alignment.bottom_left,
                                     ),
                                 ],
-                                width=40,
-                                height=40,
+                                width=35,
+                                height=35,
                             ),
                             items=[
                                 ft.PopupMenuItem(
@@ -90,7 +96,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             ft.View(
                 route="/login",
                 controls=[LoginPage(page)],
-                scroll=ft.ScrollMode.HIDDEN,
+                vertical_alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER
             ))
 
         if page.route == "/clients":
@@ -98,7 +105,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             layout, app_state_new = create_app_layout(page)
             app_state.update(app_state_new)  # Atualiza o app_state com os novos dados
             if layout is None:
-                page.go("/login") 
+                page.go("/login")
             else:
                 page.title = "Clientes"
                 page.views.append(
@@ -115,8 +122,12 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             page.views.append(
                 ft.View(
                     route="/register",
+                    appbar=ft.AppBar(
+                        title=ft.Text("Registro", size=20, weight=ft.FontWeight.BOLD),
+                        bgcolor=ft.Colors.TRANSPARENT,
+                        center_title=True,
+                    ),
                     controls=[RegisterPage(page)],
-                    scroll=ft.ScrollMode.HIDDEN,
                     vertical_alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
                 )
@@ -126,8 +137,12 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             page.views.append(
                 ft.View(
                     route="/activation",
+                    appbar=ft.AppBar(
+                        title=ft.Text("Ativação", size=20, weight=ft.FontWeight.BOLD),
+                        bgcolor=ft.Colors.TRANSPARENT,
+                        center_title=True,
+                    ),
                     controls=[ActivationPage(page)],
-                    scroll=ft.ScrollMode.HIDDEN,
                     vertical_alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
                 )
