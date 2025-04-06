@@ -43,7 +43,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             def __init__(self, title):
                 super().__init__(
                     title=ft.Text(
-                        f"{username} - {title}" if username else title,
+                        f"{title}",
                         size=20,
                         weight=ft.FontWeight.BOLD,
                         color=current_color_scheme.primary
@@ -104,21 +104,23 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             # Cria o layout dinamicamente quando a rota é /clients
             layout, app_state_new = create_app_layout(page)
             app_state.update(app_state_new)  # Atualiza o app_state com os novos dados
-            if layout is None:
-                page.go("/login")
-            else:
-                page.title = "Clientes"
-                page.views.append(
-                    ft.View(
-                        route="/clients",
-                        drawer=create_drawer(page, company_data),
-                        appbar=create_appbar("Clientes"),
-                        controls=[layout],
-                        scroll=ft.ScrollMode.HIDDEN,
-                    )
+            page.title = "Clientes"
+            page.window.height = 720.0
+            page.window.width = 1280.0
+            page.window.min_height = 720.0
+            page.window.min_width = 1280.0
+            page.views.append(
+                ft.View(
+                    route="/clients",
+                    drawer=create_drawer(page, company_data),
+                    appbar=create_appbar("Clientes"),
+                    controls=[layout],
+                    scroll=ft.ScrollMode.HIDDEN,
                 )
+            )
         elif page.route == "/register":
             page.title = "Registro"
+            page.window.height
             page.views.append(
                 ft.View(
                     route="/register",

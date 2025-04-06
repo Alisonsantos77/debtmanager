@@ -1,15 +1,17 @@
+import logging
 import os
-import flet as ft
+import random
 import smtplib
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
+from secrets import token_urlsafe
+
+import flet as ft
+from dotenv import load_dotenv
+
+from components.app_layout import get_usage_data
 from utils.supabase_utils import read_supabase, write_supabase
 from utils.theme_utils import get_current_color_scheme
-from secrets import token_urlsafe
-import logging
-import random
-from dotenv import load_dotenv
-from components.app_layout import get_usage_data
-from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
@@ -58,7 +60,6 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         {"id": 3, "name": "enterprise", "message_limit": 500, "pdf_limit": 30, "price": "400.00"}
     ]
     current_plan = next((p for p in plans_data if p["id"] == current_plan_id), plans_data[0])
-    # Permitir todos os planos (downgrade incluso)
     available_plans = [p["name"] for p in plans_data]
     plan_dropdown = ft.Dropdown(label="Escolher Novo Plano", options=[
                                 ft.dropdown.Option(plan) for plan in available_plans], width=200)
@@ -212,7 +213,10 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
 
     profile_content = ft.Column([
         ft.Row([avatar, ft.Column([ft.Text(f"Bem-vindo, {username}!", size=24, weight=ft.FontWeight.BOLD),
-                                   ft.ElevatedButton("Mudar avatar", on_click=mudar_perfil)], spacing=10)], alignment=ft.MainAxisAlignment.START),
+                                   ft.ElevatedButton("Mudar avatar", on_click=mudar_perfil, style=ft.ButtonStyle(
+                                       elevation=2,
+                                       shape=ft.RoundedRectangleBorder(radius=5),
+                                   ),)], spacing=10)], alignment=ft.MainAxisAlignment.START),
         ft.Text(f"Email: {current_email}", size=16),
         ft.Text(f"Plano Atual: {current_plan['name']}", size=16),
         ft.Text(f"Consumo: {usage_data['messages_sent']}/{current_plan['message_limit']} mensagens | {usage_data['pdfs_processed']}/{current_plan['pdf_limit']} PDFs",
@@ -220,9 +224,22 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         ft.Divider(),
         ft.Text("Escolha ou Renove seu Plano", size=20, weight=ft.FontWeight.BOLD),
         plan_cards,
-        ft.Row([plan_dropdown, ft.ElevatedButton("Mudar Plano", on_click=request_plan_change)]),
-        ft.Row([ft.ElevatedButton("Renovar Plano Atual", on_click=lambda e: request_plan_change(e, is_renewal=True))]),
-        ft.Row([upgrade_code_field, ft.ElevatedButton("Aplicar Mudança", on_click=apply_plan_change)]),
+        ft.Row(
+            alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[plan_dropdown,
+                      ft.ElevatedButton("Mudar Plano", on_click=request_plan_change, style=ft.ButtonStyle(
+                          elevation=2,
+                          shape=ft.RoundedRectangleBorder(radius=5),
+                      )),
+                      ft.ElevatedButton("Renovar Plano Atual", on_click=lambda e: request_plan_change(e, is_renewal=True), style=ft.ButtonStyle(
+                          elevation=2,
+                          shape=ft.RoundedRectangleBorder(radius=5),
+                      ))
+                      ]),
+        ft.Row([upgrade_code_field, ft.ElevatedButton("Aplicar Mudança", on_click=apply_plan_change, style=ft.ButtonStyle(
+            elevation=2,
+            shape=ft.RoundedRectangleBorder(radius=5),
+        ))]),
         feedback_text,
         ft.Divider(),
         ft.Text("Contato", size=20, weight=ft.FontWeight.BOLD),

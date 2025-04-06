@@ -1,26 +1,63 @@
-import flet as ft
 import logging
-from utils.supabase_utils import write_supabase
-from flet.security import encrypt
+import os
+import random
 import smtplib
 from email.mime.text import MIMEText
-import os
-from dotenv import load_dotenv
 from time import sleep
-import random
+
+import flet as ft
+import flet_lottie as fl
+from dotenv import load_dotenv
+from flet.security import encrypt
+
+from utils.supabase_utils import write_supabase
 
 load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 SUPPORT_EMAIL = "Alisondev77@hotmail.com"
 SECRET_KEY = os.getenv("MY_APP_SECRET_KEY")
-
+LOTTIE_REGISTER = os.getenv("LOTTIE_REGISTER")
 logger = logging.getLogger(__name__)
+
+class PlanCard(ft.Card):
+    def __init__(self, plan_name: str, messages: str, pdfs: str, price: str, description: str, bgcolor: str, letter: str):
+        super().__init__(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.CircleAvatar(content=ft.Text(letter), bgcolor=bgcolor, color=ft.Colors.WHITE),
+                    ft.Text(plan_name, size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text(messages),
+                    ft.Text(pdfs),
+                    ft.Text(f"R$ {price}", size=16, color=ft.Colors.GREEN),
+                    ft.Text(description, italic=True)
+                ],
+                    alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+                padding=20),
+            elevation=5,
+            col={"xs": 12, "sm": 6, "md": 4}
+        )
 
 
 def RegisterPage(page: ft.Page):
-    username_field = ft.TextField(label="Username", width=300, border_color=ft.Colors.BLUE)
-    email_field = ft.TextField(label="Email", width=300, border_color=ft.Colors.BLUE)
+    page.scroll = ft.ScrollMode.HIDDEN
+
+    username_field = ft.TextField(
+        label="Username",
+        width=300,
+        border_color=ft.Colors.BLUE,
+        focused_border_color=ft.Colors.BLUE,
+        border_radius=10,
+    )
+    email_field = ft.TextField(
+        label="Email",
+        width=300,
+        border_color=ft.Colors.BLUE,
+        focused_border_color=ft.Colors.BLUE,
+        border_radius=10,
+        keyboard_type="email",
+        prefix_icon=ft.icons.EMAIL
+    )
     plan_dropdown = ft.Dropdown(
         label="Escolher Plano",
         options=[
@@ -29,10 +66,22 @@ def RegisterPage(page: ft.Page):
             ft.dropdown.Option("enterprise")
         ],
         value="basic",
-        width=300
+        width=300,
+        border_color=ft.Colors.BLUE,
+        focused_border_color=ft.Colors.BLUE_400
     )
     status_text = ft.Text("", color=ft.Colors.RED)
-    register_button = ft.ElevatedButton("Registrar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
+    register_button = ft.ElevatedButton(
+        "Registrar",
+        bgcolor=ft.Colors.BLUE,
+        color=ft.Colors.WHITE,
+        width=300,
+        height=50,
+        style=ft.ButtonStyle(
+            elevation=2,
+            shape=ft.RoundedRectangleBorder(radius=5),
+        ),
+    )
 
     plans_data = {
         "basic": {"id": 1, "message_limit": 100, "pdf_limit": 5, "price": "150.00"},
@@ -40,19 +89,12 @@ def RegisterPage(page: ft.Page):
         "enterprise": {"id": 3, "message_limit": 500, "pdf_limit": 30, "price": "400.00"}
     }
 
-    plan_details = ft.Column([
-        ft.Text("Detalhes dos Planos:", size=16, weight=ft.FontWeight.BOLD),
-        ft.Text("Básico: 100 mensagens/mês, 5 PDFs/mês, R$ 150,00", size=14),
-        ft.Text("Pro: 200 mensagens/mês, 15 PDFs/mês, R$ 250,00", size=14),
-        ft.Text("Enterprise: 500 mensagens/mês, 30 PDFs/mês, R$ 400,00", size=14)
-    ], spacing=5)
-
     def show_success_and_redirect(route, message="Sucesso!"):
         success_dialog = ft.AlertDialog(
             content=ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN),
+                        ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN),
                         ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -149,17 +191,66 @@ def RegisterPage(page: ft.Page):
 
     register_button.on_click = register_user
 
-    return ft.Column(
+    lottie_container = ft.Container(
+        content=fl.Lottie(
+            src=LOTTIE_REGISTER,
+            background_loading=True,
+            filter_quality=ft.FilterQuality.HIGH,
+            repeat=True,
+        ),
+        width=400,
+        height=350,
+        alignment=ft.alignment.center
+    )
+
+    form_container = ft.Column(
         [
             ft.Text("Registrar Novo Usuário", size=24, weight=ft.FontWeight.BOLD),
             username_field,
             email_field,
             plan_dropdown,
-            plan_details,
             register_button,
             status_text,
         ],
         alignment=ft.MainAxisAlignment.CENTER,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         spacing=20,
+        width=400
+    )
+
+    # Linha com Lottie e formulário
+    top_row = ft.Row(
+        [
+            lottie_container,
+            form_container
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=30
+    )
+
+    plan_cards = ft.ResponsiveRow(
+        [
+            PlanCard("Básico", "100 mensagens/mês", "5 PDFs/mês", "150,00",
+                     "Ideal para iniciantes!", ft.Colors.BLUE_700, "B"),
+            PlanCard("Pro", "200 mensagens/mês", "15 PDFs/mês", "250,00",
+                     "Mais poder para crescer!", ft.Colors.PURPLE_700, "P"),
+            PlanCard("Enterprise", "500 mensagens/mês", "30 PDFs/mês", "400,00",
+                     "Domine suas notificações!", ft.Colors.RED_700, "E")
+        ],
+        alignment=ft.MainAxisAlignment.CENTER
+    )
+
+    return ft.Container(
+        content=ft.Column(
+            [
+                top_row,
+                ft.Divider(),
+                ft.Text("Escolha seu Plano", size=20, weight=ft.FontWeight.BOLD),
+                plan_cards
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            scroll=ft.ScrollMode.AUTO
+        ),
+        padding=20
     )

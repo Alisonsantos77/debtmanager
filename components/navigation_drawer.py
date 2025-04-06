@@ -22,7 +22,6 @@ def create_drawer(page: ft.Page, company_data: dict):
         elif selected_index == 2:
             page.go("/dashboard")
 
-    # Recupera prefixo e URL base do DiceBear
     prefix = os.getenv("PREFIX")
     URL_DICEBEAR = os.getenv("URL_DICEBEAR")
 

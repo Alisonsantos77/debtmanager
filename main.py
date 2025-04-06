@@ -52,7 +52,7 @@ def verificar_status_usuario(page):
             last_checked = page.client_storage.get("last_checked") or 0
             current_time = time.time()
 
-            if cached_status and current_time - last_checked < 600:  # Cache válido por 10 minutos
+            if cached_status and current_time - last_checked < 600:
                 logger.info(f"Status do usuário obtido do cache: {cached_status}")
                 if cached_status == "inativo":
                     logger.warning("Usuário inativo. Limpando armazenamento e redirecionando para login.")
@@ -91,7 +91,16 @@ def verificar_status_usuario(page):
 
 
 def main(page: ft.Page):
-    # page.client_storage.clear()
+    page.window.height = 720.0
+    page.window.min_height = 960.0
+    page.window.max_height = 1080.0
+    page.window.min_width = 1280.0
+    page.window.width = 1280.0
+    def page_resized(e):
+        print("New page size:", page.window.width, page.window.height)
+
+    page.on_resized = page_resized    # Campos do formulário
+
     cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF",
                    "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}
     cores_dark = {"primary": "#60A5FA", "on_primary": "#1E3A8A",

@@ -44,7 +44,6 @@ def LoginPage(page: ft.Page):
         focused_border_color=ft.Colors.BLUE_400,
         cursor_color=ft.Colors.BLUE_400,
         text_size=16,
-        capitalization="characters",
     )
     password_field = ft.TextField(
         label="Senha/Code",

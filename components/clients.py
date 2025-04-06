@@ -24,17 +24,18 @@ def create_clients_page(
     filter_date_button = ft.ElevatedButton(
         "Filtrar por Data",
         on_click=lambda e: page.open(date_picker),
-        bgcolor=current_color_scheme.primary,
-        color="white",
         icon=ft.Icons.CALENDAR_TODAY,
-        icon_color="white",
+        style=ft.ButtonStyle(
+            elevation=2,
+            shape=ft.RoundedRectangleBorder(radius=5),
+        ),
     )
 
-    # Texto para exibir a data selecionada (substituindo "Última Atualização")
     selected_date_text = ft.Text(
         f"Data Selecionada: Nenhuma",
         size=12,
-        color=current_color_scheme.on_surface
+        color=current_color_scheme.primary,
+        weight=ft.FontWeight.NORMAL,
     )
 
     def on_date_change(e):
@@ -79,9 +80,21 @@ def create_clients_page(
     search_field = ft.TextField(
         label="Buscar Cliente",
         on_change=search_and_filter_clients,
-        prefix_icon=ft.Icons.SEARCH,
-        border_color=current_color_scheme.outline,
+        border_color=current_color_scheme.primary,
+        height=50,
         border_radius=10,
+        suffix=ft.IconButton(
+            icon=ft.icons.CLEAR,
+            icon_color=current_color_scheme.primary,
+            on_click=lambda e: [
+                setattr(search_field, 'value', ''),
+                setattr(selected_date_text, 'value', 'Data Selecionada: Nenhuma'),
+                filtered_clients.clear(),
+                filtered_clients.extend(clients_list),
+                update_client_list(),
+                page.update()
+            ],
+        ),
     )
 
     return ft.Container(
@@ -91,23 +104,6 @@ def create_clients_page(
                     search_field,
                     filter_date_button
                 ], alignment=ft.MainAxisAlignment.START, spacing=10),
-                ft.Row([
-                    ft.ElevatedButton(
-                        "Resetar Filtros",
-                        on_click=lambda e: [
-                            setattr(search_field, 'value', ''),
-                            setattr(selected_date_text, 'value', 'Data Selecionada: Nenhuma'),
-                            filtered_clients.clear(),
-                            filtered_clients.extend(clients_list),
-                            update_client_list(),
-                            page.update()
-                        ],
-                        bgcolor=ft.Colors.RED,
-                        color=ft.Colors.WHITE,
-                        icon=ft.Icons.CLEAR_ALL,
-                        icon_color=ft.Colors.WHITE,
-                    ),
-                ], alignment=ft.MainAxisAlignment.START),
                 selected_date_text,
                 client_list_view
             ], expand=2),

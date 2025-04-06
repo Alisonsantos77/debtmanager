@@ -2,15 +2,18 @@ import asyncio
 import datetime
 import logging
 import os
+
 import flet as ft
 from dotenv import load_dotenv
 from twilio.rest import Client
+
 from components.clients import create_clients_page
 from components.dialogs import create_dialogs
 from services.message_manager import MessageManager
 from services.pdf_extractor import PDFExtractor
 from utils.message_templates import MessageTemplates
-from utils.supabase_utils import fetch_user_id, fetch_user_data, fetch_plan_data, update_usage_data
+from utils.supabase_utils import (fetch_plan_data, fetch_user_data,
+                                  fetch_user_id, update_usage_data)
 from utils.theme_utils import get_current_color_scheme
 
 load_dotenv()
@@ -172,7 +175,7 @@ def create_app_layout(page: ft.Page):
             navigation_row.controls.append(ft.ElevatedButton(
                 "Anterior", on_click=lambda e: change_page(-1), bgcolor=current_color_scheme_.primary, color=current_color_scheme_.on_primary))
         navigation_row.controls.append(
-            ft.Text(f"Página {current_page + 1} de {total_pages}", color=current_color_scheme_.on_surface))
+            ft.Text(f"Página {current_page + 1} de {total_pages}", color=current_color_scheme_.primary))
         if current_page < total_pages - 1:
             navigation_row.controls.append(ft.ElevatedButton("Próximo", on_click=lambda e: change_page(
                 1), bgcolor=current_color_scheme_.primary, color=current_color_scheme_.on_primary))
@@ -464,14 +467,20 @@ def create_app_layout(page: ft.Page):
 
     c = get_current_color_scheme(page)
     messages_view.controls = [ft.Row(alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, expand=True, controls=[ft.Text(
-        "Carregue um relatório de PDF para começar", size=20, weight=ft.FontWeight.BOLD, color=c.primary, text_align=ft.TextAlign.CENTER), ft.Text("Clique no botão acima para carregar um relatório", size=16, italic=True, color=c.on_surface, text_align=ft.TextAlign.CENTER)])])]
+        "Carregue um relatório de PDF para começar", size=20, weight=ft.FontWeight.BOLD, color=c.primary, text_align=ft.TextAlign.CENTER), ft.Text("Clique no botão acima para carregar um relatório", size=16, italic=True, color=c.primary_container, text_align=ft.TextAlign.CENTER)])])]
     layout = ft.Column([
         ft.Row([
-            ft.ElevatedButton("Carregar Relatório", icon=ft.Icons.UPLOAD_FILE,
-                              on_click=lambda _: file_picker.pick_files(allowed_extensions=["pdf"])),
+            ft.ElevatedButton("Carregar Relatório",
+                              icon=ft.Icons.UPLOAD_FILE,
+                              style=ft.ButtonStyle(
+                                  elevation=2,
+                                  shape=ft.RoundedRectangleBorder(radius=5),
+                              ),
+                              on_click=lambda _: file_picker.pick_files(allowed_extensions=["pdf"])
+                              ),
             usage_display
         ], alignment=ft.MainAxisAlignment.SPACE_AROUND, spacing=10),
         create_clients_page(clients_list, filtered_clients, current_page, client_list_view,
                             messages_view, last_sent, dialogs, page, update_client_list)
-    ], expand=True, alignment=ft.MainAxisAlignment.CENTER)
+    ], expand=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20)
     return layout, {"toggle_theme": toggle_theme, "dialogs": dialogs, "clients_list": clients_list, "filtered_clients": filtered_clients, "update_client_list": update_client_list, "history": history}
