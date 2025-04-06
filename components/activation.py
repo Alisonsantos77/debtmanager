@@ -2,8 +2,9 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from time import sleep
-
+import os
 import flet as ft
+import flet_lottie as fl
 
 from utils.supabase_utils import (fetch_plan_data, fetch_user_data,
                                   fetch_user_id, update_user_status,
@@ -13,11 +14,87 @@ logger = logging.getLogger(__name__)
 
 
 def ActivationPage(page: ft.Page):
-    username_field = ft.TextField(label="Usuário", width=300, border_color=ft.Colors.BLUE)
-    activation_code_field = ft.TextField(label="Código", width=300, border_color=ft.Colors.BLUE, password=True)
-    status_text = ft.Text("", color=ft.Colors.RED)
-    activate_button = ft.ElevatedButton("Ativar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
-    login_button = ft.TextButton("Acessar", on_click=lambda _: page.go("/login"))
+    lottie_url = os.getenv("LOTTIE_ACTIVATION")
+    activation_lottie = fl.Lottie(
+        src=lottie_url,
+        width=400,
+        height=400,
+        repeat=True,
+        animate=True,
+        background_loading=True,
+        filter_quality=ft.FilterQuality.HIGH,
+        fit=ft.ImageFit.CONTAIN,
+    )
+
+    welcome_text = ft.Text(
+        "Ative sua conta e comece agora!",
+        size=18,
+        color=ft.Colors.BLUE_GREY_700,
+        weight=ft.FontWeight.W_500,
+        text_align=ft.TextAlign.CENTER,
+    )
+
+    username_field = ft.TextField(
+        label="Usuário",
+        width=320,
+        border="underline",
+        filled=True,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_GREY),
+        border_color=ft.Colors.BLUE_600,
+        focused_border_color=ft.Colors.BLUE_400,
+        cursor_color=ft.Colors.BLUE_400,
+        text_size=16,
+        capitalization="characters",
+    )
+    activation_code_field = ft.TextField(
+        label="Código",
+        width=320,
+        border="underline",
+        filled=True,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_GREY),
+        border_color=ft.Colors.BLUE_600,
+        focused_border_color=ft.Colors.BLUE_400,
+        cursor_color=ft.Colors.BLUE_400,
+        text_size=16,
+        password=True,
+        can_reveal_password=True, 
+    )
+    status_text = ft.Text("", color=ft.Colors.RED_400, size=14, italic=True)
+
+    activate_button = ft.ElevatedButton(
+        "Ativar",
+        style=ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.HOVERED: ft.Colors.BLUE_500,
+                ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
+            },
+            color=ft.Colors.WHITE,
+            elevation={"pressed": 2, "": 5},
+            animation_duration=300,
+            shape=ft.RoundedRectangleBorder(radius=8),
+        ),
+        width=320,
+        height=50,
+    )
+
+    login_row = ft.Row(
+        [
+            ft.Text("Já ativou sua conta?", size=14, color=ft.Colors.BLUE_GREY_600),
+            ft.TextButton(
+                "Acesse aqui",
+                style=ft.ButtonStyle(
+                    color={
+                        ft.ControlState.HOVERED: ft.Colors.BLUE_400,
+                        ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
+                    },
+                ),
+                on_click=lambda _: page.go("/login")
+            ),
+        ],
+        spacing=5,
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+
     prefix = os.getenv("PREFIX")
 
     def show_success_and_redirect(route, message="Sucesso!"):
@@ -25,8 +102,8 @@ def ActivationPage(page: ft.Page):
             content=ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN),
-                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN_400),
+                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400)
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -47,7 +124,7 @@ def ActivationPage(page: ft.Page):
 
     def show_loading():
         loading_dialog = ft.AlertDialog(
-            content=ft.Container(content=ft.ProgressRing(), alignment=ft.alignment.center),
+            content=ft.Container(content=ft.ProgressRing(color=ft.Colors.BLUE_400), alignment=ft.alignment.center),
             bgcolor=ft.Colors.TRANSPARENT,
             modal=True,
             disabled=True,
@@ -102,25 +179,40 @@ def ActivationPage(page: ft.Page):
     activate_button.on_click = activate
 
     page.clean()
-    form_card = ft.Card(
-        content=ft.Container(
-            content=ft.Column(
+    layout_activation = ft.ResponsiveRow(
+        controls=[
+            # Lado esquerdo: Lottie
+            ft.Column(
+                col={"sm": 6, "md": 5, "lg": 4},
                 controls=[
-                    ft.Text("Ativação", size=24, weight=ft.FontWeight.BOLD),
+                    activation_lottie,
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            # Lado direito: Formulário de ativação
+            ft.Column(
+                col={"sm": 6, "md": 5, "lg": 4},
+                controls=[
+                    welcome_text,
+                    ft.Container(height=20),
                     username_field,
                     activation_code_field,
                     status_text,
                     activate_button,
-                    login_button,
+                    ft.Container(height=15),
+                    login_row,
                 ],
-                spacing=15,
+                alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=15,
             ),
-            padding=20,
-        ),
-        elevation=8,
-        width=350,
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        columns=12,
     )
+
     page.update()
 
-    return ft.Container(content=form_card)
+    return layout_activation

@@ -8,8 +8,8 @@ from secrets import token_urlsafe
 import logging
 import random
 from dotenv import load_dotenv
-import base64
-from components.app_layout import get_usage_data  # Importa pra usar o Client Storage
+from components.app_layout import get_usage_data
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
@@ -23,29 +23,22 @@ class PlanCard(ft.Card):
     def __init__(self, plan_name: str, messages: str, pdfs: str, price: str, description: str, bgcolor: str, letter: str):
         super().__init__(
             content=ft.Container(
-                content=ft.Column([
-                    ft.CircleAvatar(content=ft.Text(letter), bgcolor=bgcolor, color=ft.Colors.WHITE),
-                    ft.Text(plan_name, size=18, weight=ft.FontWeight.BOLD),
-                    ft.Text(messages),
-                    ft.Text(pdfs),
-                    ft.Text(f"R$ {price}", size=16, color=ft.Colors.GREEN),
-                    ft.Text(description, italic=True)
-                ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
-                padding=20
-            ),
-            elevation=5,
-            col={"xs": 12, "sm": 6, "md": 4}
-        )
+                content=ft.Column([ft.CircleAvatar(content=ft.Text(letter), bgcolor=bgcolor, color=ft.Colors.WHITE),
+                                   ft.Text(plan_name, size=18, weight=ft.FontWeight.BOLD), ft.Text(messages),
+                                   ft.Text(pdfs), ft.Text(f"R$ {price}", size=16, color=ft.Colors.GREEN),
+                                   ft.Text(description, italic=True)],
+                                  alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+                padding=20), elevation=5, col={"xs": 12, "sm": 6, "md": 4})
 
 
 def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     current_color_scheme = get_current_color_scheme(page)
     avatar_img = ft.Ref[ft.CircleAvatar]()
-
     prefix = os.getenv("PREFIX")
     username = page.client_storage.get(f"{prefix}username") or "Debt Manager"
     user_id = page.client_storage.get(f"{prefix}user_id")
     saved_avatar = page.client_storage.get(f"{prefix}avatar")
+
     if not username or not user_id:
         logger.warning("Username ou user_id não encontrados no client_storage. Redirecionando para login.")
         page.overlay.append(ft.SnackBar(
@@ -65,33 +58,18 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         {"id": 3, "name": "enterprise", "message_limit": 500, "pdf_limit": 30, "price": "400.00"}
     ]
     current_plan = next((p for p in plans_data if p["id"] == current_plan_id), plans_data[0])
-
-    # Filtra opções de upgrade com base no plano atual
-    available_plans = [p["name"] for p in plans_data if p["id"] > current_plan["id"]]
-    plan_dropdown = ft.Dropdown(
-        label="Escolher Novo Plano",
-        options=[ft.dropdown.Option(plan) for plan in available_plans],
-        width=200
-    )
-    upgrade_code_field = ft.TextField(label="Código de Upgrade", width=200)
+    # Permitir todos os planos (downgrade incluso)
+    available_plans = [p["name"] for p in plans_data]
+    plan_dropdown = ft.Dropdown(label="Escolher Novo Plano", options=[
+                                ft.dropdown.Option(plan) for plan in available_plans], width=200)
+    upgrade_code_field = ft.TextField(label="Código de Mudança", width=200)
     feedback_text = ft.Text("", color=ft.Colors.GREEN)
 
-    avatar = ft.Stack(
-        [
-            ft.CircleAvatar(
-                foreground_image_src=saved_avatar if saved_avatar else f"{URL_DICEBEAR}seed={username}",
-                width=80,
-                height=80,
-                ref=avatar_img,
-            ),
-            ft.Container(
-                content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
-                alignment=ft.alignment.bottom_left,
-            ),
-        ],
-        width=50,
-        height=50,
-    )
+    avatar = ft.Stack([
+        ft.CircleAvatar(foreground_image_src=saved_avatar if saved_avatar else f"{URL_DICEBEAR}seed={username}",
+                        width=80, height=80, ref=avatar_img),
+        ft.Container(content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5), alignment=ft.alignment.bottom_left),
+    ], width=50, height=50)
 
     def mudar_perfil(e):
         avatar_aleatorio = f"{URL_DICEBEAR}seed={random.randint(1000, 9999)}"
@@ -99,84 +77,112 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         avatar_img.current.foreground_image_src = novo_avatar
         avatar_img.current.update()
         page.client_storage.set(f"{prefix}avatar", novo_avatar)
+        logger.info(f"Avatar alterado para {novo_avatar} pelo usuário {username}")
+        page.overlay.append(ft.SnackBar(ft.Text("Avatar atualizado com sucesso!"), bgcolor=ft.Colors.GREEN))
         page.update()
 
-
-
-    def send_upgrade_request(username, email, current_plan, new_plan, code):
+    def send_plan_change_request(username, email, current_plan, new_plan, code, is_renewal=False):
         current_info = next(p for p in plans_data if p["name"] == current_plan)
         new_info = next(p for p in plans_data if p["name"] == new_plan)
+        action = "Renovação" if is_renewal else "Mudança de Plano"
         try:
             msg = MIMEText(
-                f"Solicitação de Upgrade:\n"
-                f"Usuário: {username}\n"
-                f"Email: {email}\n"
+                f"Solicitação de {action}:\nUsuário: {username}\nEmail: {email}\n"
                 f"De: {current_plan} (Limites: {current_info['message_limit']} mensagens/mês, {current_info['pdf_limit']} PDFs/mês, Preço: R$ {current_info['price']})\n"
                 f"Para: {new_plan} (Limites: {new_info['message_limit']} mensagens/mês, {new_info['pdf_limit']} PDFs/mês, Preço: R$ {new_info['price']})\n"
-                f"Código de Upgrade: {code}"
-            )
-            msg['Subject'] = "Solicitação de Upgrade - DebtManager"
+                f"Código: {code}")
+            msg['Subject'] = f"Solicitação de {action} - DebtManager"
             msg['From'] = EMAIL_SENDER
             msg['To'] = SUPPORT_EMAIL
             with smtplib.SMTP("smtp.gmail.com", 587) as server:
                 server.starttls()
                 server.login(EMAIL_SENDER, EMAIL_PASSWORD)
                 server.send_message(msg)
-            logger.info(f"Email de upgrade enviado para {SUPPORT_EMAIL}")
+            logger.info(f"Email de {action.lower()} enviado para {SUPPORT_EMAIL} por {username}")
+            return True
         except Exception as e:
-            logger.error(f"Erro ao enviar email: {e}")
-            feedback_text.value = "Erro ao enviar solicitação."
-            page.update()
+            logger.error(f"Erro ao enviar email de {action.lower()} para {username}: {e}")
+            return False
 
-    def request_upgrade(e):
-        new_plan = plan_dropdown.value
-        if not new_plan:
-            page.open(ft.SnackBar(ft.Text("Selecione um plano!"), bgcolor=ft.Colors.RED))
+    def request_plan_change(e, is_renewal=False):
+        new_plan = current_plan["name"] if is_renewal else plan_dropdown.value
+        if not new_plan and not is_renewal:
+            logger.warning(f"Usuário {username} tentou mudar plano sem selecionar um")
+            page.overlay.append(ft.SnackBar(ft.Text("Selecione um plano primeiro, parceiro!"), bgcolor=ft.Colors.RED))
+            page.update()
             return
-        upgrade_code = token_urlsafe(16)
-        write_supabase(
-            "upgrade_requests",
-            {"user_id": user_id, "plan_id": next(p["id"] for p in plans_data if p["name"] == new_plan),
-             "code": upgrade_code, "status": "pending"},
-            page=page
-        )
-        send_upgrade_request(username, current_email, current_plan["name"], new_plan, upgrade_code)
-        feedback_text.value = f"Pedido enviado! Código: {upgrade_code}"
+        change_code = token_urlsafe(16)
+        action = "renovação" if is_renewal else "mudança de plano"
+        logger.info(f"Gerando solicitação de {action} para {username}: plano {new_plan}, código {change_code}")
+        if write_supabase("upgrade_requests",
+                          {"user_id": user_id, "plan_id": next(p["id"] for p in plans_data if p["name"] == new_plan),
+                           "code": change_code, "status": "pending"}, page=page):
+            if send_plan_change_request(username, current_email, current_plan["name"], new_plan, change_code, is_renewal):
+                feedback_text.value = f"Pedido enviado! Código: {change_code}"
+                page.overlay.append(ft.SnackBar(
+                    ft.Text(f"Solicitação de {action} enviada! Código: {change_code}"), bgcolor=ft.Colors.GREEN))
+                logger.info(f"Solicitação de {action} salva e email enviado para {username}")
+            else:
+                feedback_text.value = f"Deu ruim no email de {action}. Tenta de novo!"
+                page.overlay.append(ft.SnackBar(
+                    ft.Text(f"Erro ao enviar email pro suporte. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                logger.error(f"Falha ao enviar email de {action} para {username}")
+        else:
+            feedback_text.value = f"Erro ao salvar o pedido de {action}. Tenta de novo!"
+            page.overlay.append(ft.SnackBar(
+                ft.Text(f"Deu pau ao salvar teu pedido. Dá outra chance!"), bgcolor=ft.Colors.RED))
+            logger.error(f"Falha ao salvar solicitação de {action} no Supabase para {username}")
         page.update()
 
-    def apply_upgrade(e):
+    def apply_plan_change(e):
         code = upgrade_code_field.value.strip()
-        logger.info(f"Tentando aplicar código: {code}")
         if not code:
-            feedback_text.value = "Insira o código de upgrade!"
-            page.open(ft.SnackBar(ft.Text("Insira o código de upgrade!"), bgcolor=ft.Colors.RED))
+            logger.warning(f"Usuário {username} tentou aplicar mudança sem código")
+            feedback_text.value = "Insira o código, parceiro!"
+            page.overlay.append(ft.SnackBar(ft.Text("Faltou o código, amigo!"), bgcolor=ft.Colors.RED))
             page.update()
             return
+        logger.info(f"Tentando aplicar mudança para {username} com código {code}")
         request = read_supabase("upgrade_requests", f"?user_id=eq.{user_id}&code=eq.{code}&status=eq.pending", page)
-        logger.info(f"Resultado da consulta ao Supabase: {request}")
         if request and isinstance(request, list) and len(request) > 0:
             plan_id = request[0].get("plan_id")
-            logger.info(f"Plan ID encontrado: {plan_id}")
             selected_plan = next((p for p in plans_data if p["id"] == plan_id), None)
             if selected_plan:
-                logger.info(f"Plano selecionado: {selected_plan['name']}")
-                page.client_storage.set(f"{prefix}messages_sent", 0)
-                page.client_storage.set(f"{prefix}pdfs_processed", 0)
-                write_supabase(f"users_debt?id=eq.{user_id}", {
-                    "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0
-                }, method="patch", page=page)
-                write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {
-                    "status": "approved"
-                }, method="patch", page=page)
-                page.client_storage.set(f"{prefix}user_plan", selected_plan["name"])
-                app_state["user_plan"] = selected_plan["name"]
-                feedback_text.value = f"Plano atualizado para {selected_plan['name']}!"
+                logger.info(f"Mudança válida encontrada: plano {selected_plan['name']} para {username}")
+                if write_supabase(f"users_debt?id=eq.{user_id}", {
+                    "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0,
+                    "data_expiracao": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                }, method="patch", page=page):
+                    if write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {"status": "approved"}, method="patch", page=page):
+                        page.client_storage.set(f"{prefix}messages_sent", 0)
+                        page.client_storage.set(f"{prefix}pdfs_processed", 0)
+                        page.client_storage.set(f"{prefix}user_plan", selected_plan["name"])
+                        app_state["user_plan"] = selected_plan["name"]
+                        action = "renovado" if selected_plan["name"] == current_plan["name"] else "atualizado"
+                        feedback_text.value = f"Plano {action} para {selected_plan['name']}!"
+                        page.overlay.append(ft.SnackBar(
+                            ft.Text(f"Beleza! Teu plano foi {action} pra {selected_plan['name']}"), bgcolor=ft.Colors.GREEN))
+                        logger.info(f"Mudança aplicada com sucesso para {username}: plano {selected_plan['name']}")
+                    else:
+                        feedback_text.value = "Erro ao aprovar o pedido. Tenta de novo!"
+                        page.overlay.append(ft.SnackBar(
+                            ft.Text("Falha ao aprovar a mudança. Tenta outra vez!"), bgcolor=ft.Colors.RED))
+                        logger.error(
+                            f"Falha ao atualizar status da mudança para 'approved' no Supabase para {username}")
+                else:
+                    feedback_text.value = "Erro ao atualizar o plano. Tenta de novo!"
+                    page.overlay.append(ft.SnackBar(
+                        ft.Text("Deu ruim ao atualizar teu plano. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                    logger.error(f"Falha ao atualizar users_debt no Supabase para {username}")
             else:
-                logger.error(f"Plano com ID {plan_id} não encontrado em plans_data")
                 feedback_text.value = "Plano não encontrado."
+                page.overlay.append(ft.SnackBar(ft.Text("Esse plano tá perdido no limbo!"), bgcolor=ft.Colors.RED))
+                logger.error(f"Plano com ID {plan_id} não encontrado em plans_data para {username}")
         else:
-            logger.error(f"Requisição inválida ou não encontrada para código {code}")
             feedback_text.value = "Código inválido ou solicitação não encontrada."
+            page.overlay.append(ft.SnackBar(
+                ft.Text("Código errado ou pedido não existe, parceiro!"), bgcolor=ft.Colors.RED))
+            logger.error(f"Requisição inválida ou não encontrada para código {code} do usuário {username}")
         page.update()
 
     plan_cards = ft.ResponsiveRow([
@@ -188,47 +194,35 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                  "Domine suas notificações!", ft.Colors.RED_700, "E")
     ], alignment=ft.MainAxisAlignment.CENTER)
 
-    social_icons = ft.Row(
-        controls=[
-            ft.IconButton(content=ft.Image(src="images/contact/icons8-whatsapp-48.png", width=40, height=40),
-                          icon_color=ft.Colors.GREEN, tooltip="Abrir WhatsApp",
-                          url="https://wa.link/oebrg2",
-                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREEN})),
-            ft.IconButton(content=ft.Image(src="images/contact/outlook-logo.png", width=40, height=40),
-                          icon_color=ft.Colors.PRIMARY, tooltip="Enviar Email",
-                          url="mailto:Alisondev77@hotmail.com?subject=Feedback%20-%20DebtManager&body=Olá, gostaria de fornecer feedback.",
-                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
-            ft.IconButton(content=ft.Image(src="images/contact/icons8-linkedin-48.png", width=40, height=40),
-                          tooltip="Acessar LinkedIn",
-                          url="https://www.linkedin.com/in/alisonsantosdev",
-                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
-            ft.IconButton(content=ft.Image(src="images/contact/icons8-github-64.png", width=40, height=40),
-                          icon_color=ft.Colors.PRIMARY, tooltip="Acessar GitHub",
-                          url="https://github.com/Alisonsantos77",
-                          style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREY})),
-        ],
-        alignment=ft.MainAxisAlignment.SPACE_AROUND,
-    )
+    social_icons = ft.Row(controls=[
+        ft.IconButton(content=ft.Image(src="images/contact/icons8-whatsapp-48.png", width=40, height=40),
+                      icon_color=ft.Colors.GREEN, tooltip="Abrir WhatsApp", url="https://wa.link/oebrg2",
+                      style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREEN})),
+        ft.IconButton(content=ft.Image(src="images/contact/outlook-logo.png", width=40, height=40),
+                      icon_color=ft.Colors.PRIMARY, tooltip="Enviar Email",
+                      url="mailto:Alisondev77@hotmail.com?subject=Feedback%20-%20DebtManager&body=Olá, gostaria de fornecer feedback.",
+                      style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
+        ft.IconButton(content=ft.Image(src="images/contact/icons8-linkedin-48.png", width=40, height=40),
+                      tooltip="Acessar LinkedIn", url="https://www.linkedin.com/in/alisonsantosdev",
+                      style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.BLUE})),
+        ft.IconButton(content=ft.Image(src="images/contact/icons8-github-64.png", width=40, height=40),
+                      icon_color=ft.Colors.PRIMARY, tooltip="Acessar GitHub", url="https://github.com/Alisonsantos77",
+                      style=ft.ButtonStyle(overlay_color={"": ft.Colors.TRANSPARENT, "hovered": ft.Colors.GREY}))
+    ], alignment=ft.MainAxisAlignment.SPACE_AROUND)
 
     profile_content = ft.Column([
-        ft.Row([
-            avatar,
-            ft.Column([
-                ft.Text(f"Bem-vindo, {username}!", size=24, weight=ft.FontWeight.BOLD),
-                ft.ElevatedButton("Mudar avatar", on_click=mudar_perfil)
-            ], spacing=10)
-        ], alignment=ft.MainAxisAlignment.START),
+        ft.Row([avatar, ft.Column([ft.Text(f"Bem-vindo, {username}!", size=24, weight=ft.FontWeight.BOLD),
+                                   ft.ElevatedButton("Mudar avatar", on_click=mudar_perfil)], spacing=10)], alignment=ft.MainAxisAlignment.START),
         ft.Text(f"Email: {current_email}", size=16),
         ft.Text(f"Plano Atual: {current_plan['name']}", size=16),
-        ft.Text(
-            f"Consumo: {usage_data['messages_sent']}/{current_plan['message_limit']} mensagens | {usage_data['pdfs_processed']}/{current_plan['pdf_limit']} PDFs",
-            size=14, color=current_color_scheme.on_surface
-        ),
+        ft.Text(f"Consumo: {usage_data['messages_sent']}/{current_plan['message_limit']} mensagens | {usage_data['pdfs_processed']}/{current_plan['pdf_limit']} PDFs",
+                size=14, color=current_color_scheme.on_surface),
         ft.Divider(),
-        ft.Text("Escolha seu Novo Plano", size=20, weight=ft.FontWeight.BOLD),
+        ft.Text("Escolha ou Renove seu Plano", size=20, weight=ft.FontWeight.BOLD),
         plan_cards,
-        ft.Row([plan_dropdown, ft.ElevatedButton("Solicitar Upgrade", on_click=request_upgrade)]),
-        ft.Row([upgrade_code_field, ft.ElevatedButton("Aplicar Upgrade", on_click=apply_upgrade)]),
+        ft.Row([plan_dropdown, ft.ElevatedButton("Mudar Plano", on_click=request_plan_change)]),
+        ft.Row([ft.ElevatedButton("Renovar Plano Atual", on_click=lambda e: request_plan_change(e, is_renewal=True))]),
+        ft.Row([upgrade_code_field, ft.ElevatedButton("Aplicar Mudança", on_click=apply_plan_change)]),
         feedback_text,
         ft.Divider(),
         ft.Text("Contato", size=20, weight=ft.FontWeight.BOLD),

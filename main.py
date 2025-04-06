@@ -17,36 +17,77 @@ logger = logging.getLogger(__name__)
 SUPABASE_KEY_USERS = os.getenv("SUPABASE_KEY_USERS")
 SUPABASE_URL_USERS = os.getenv("SUPABASE_URL_USERS")
 headers = {"apikey": SUPABASE_KEY_USERS, "Authorization": f"Bearer {SUPABASE_KEY_USERS}"}
+prefix = os.getenv("PREFIX")
 
 
 def verificar_status_usuario(page):
+    """
+    Verifica o status do usuário realizando até 5 tentativas com backoff exponencial.
+    Utiliza um cache válido por 10 minutos para evitar requisições desnecessárias.
+    Caso o usuário não esteja ativo, o clientStorage é limpo e o usuário é redirecionado para /login.
+    """
     retries = 5
-    delay = 5
+    initial_delay = 5
     max_delay = 32
+    delay = initial_delay
+
     for attempt in range(retries):
+        logger.info(f"Tentativa {attempt + 1} de {retries} para verificar status do usuário.")
         try:
-            user_id = page.client_storage.get("user_id")
-            if not user_id or page.route in ["/login", "/register"]:
+            user_id = page.client_storage.get(f"{prefix}user_id")
+
+            # Redireciona se não houver user_id e o usuário estiver fora da tela de login ou cadastro
+            if not user_id and page.route not in ["/login", "/register"]:
+                logger.warning("Sem user_id e fora da rota de login/registro. Redirecionando...")
+                page.client_storage.clear()
+                page.go("/login")
                 return
+
+            # Se estiver nas telas públicas, apenas sai da verificação
+            if page.route in ["/login", "/register"]:
+                return
+
+            # Verifica se há status armazenado em cache (válido por 10 minutos)
             cached_status = page.client_storage.get("user_status")
             last_checked = page.client_storage.get("last_checked") or 0
-            if cached_status and time.time() - last_checked < 60:  # alterei para 60 segundos
+            current_time = time.time()
+
+            if cached_status and current_time - last_checked < 600:  # Cache válido por 10 minutos
+                logger.info(f"Status do usuário obtido do cache: {cached_status}")
                 if cached_status == "inativo":
+                    logger.warning("Usuário inativo. Limpando armazenamento e redirecionando para login.")
                     page.client_storage.clear()
                     page.go("/login")
                 return
-            user_data = requests.get(f"{SUPABASE_URL_USERS}/rest/v1/users_debt?id=eq.{user_id}", headers=headers).json()
+
+            # Consulta o status do usuário no Supabase
+            logger.info("Buscando status do usuário no Supabase.")
+            response = requests.get(
+                f"{os.getenv('SUPABASE_URL_USERS')}/rest/v1/users_debt?id=eq.{user_id}",
+                headers={
+                    "apikey": os.getenv("SUPABASE_KEY_USERS"),
+                    "Authorization": f"Bearer {os.getenv('SUPABASE_KEY_USERS')}"
+                }
+            )
+            user_data = response.json()
             status = user_data[0]["status"] if user_data else "inativo"
+            logger.info(f"Status do usuário obtido: {status}")
+
+            # Armazena o status e o momento da verificação no cache
             page.client_storage.set("user_status", status)
-            page.client_storage.set("last_checked", time.time())
+            page.client_storage.set("last_checked", current_time)
+
             if status != "ativo":
+                logger.warning("Status do usuário não é ativo. Limpando armazenamento e redirecionando para login.")
                 page.client_storage.clear()
                 page.go("/login")
             break
+
         except Exception as e:
             logger.error(f"Erro ao verificar status: {e}")
             time.sleep(min(delay, max_delay))
             delay *= 2
+            logger.info(f"Aguardando {min(delay, max_delay)} segundos antes da próxima tentativa.")
 
 
 def main(page: ft.Page):
@@ -58,16 +99,16 @@ def main(page: ft.Page):
     page.theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_light))
     page.dark_theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_dark))
     theme_mode = page.client_storage.get("theme_mode") or "DARK"
-    page.theme_mode = ft.ThemeMode.DARK if theme_mode == "DARK" else ft.ThemeMode.LIGHT
+    page.theme_mode = ft.ThemeMode.LIGHT if theme_mode == "LIGHT" else ft.ThemeMode.DARK
 
     def handle_lifecycle_change(e: ft.AppLifecycleStateChangeEvent):
         if e.data == "inactive":
             logger.info("Aplicação em segundo plano")
             page.session.set("app_in_background", True)
+            verificar_status_usuario(page)
         elif e.data == "active":
             logger.info("Aplicação voltou ao primeiro plano")
             page.session.set("app_in_background", False)
-            verificar_status_usuario(page)
             page.update()
 
     company_data = {

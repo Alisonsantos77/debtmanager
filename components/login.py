@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from time import sleep
 
 import flet as ft
+import flet_lottie as fl
 
 from utils.supabase_utils import (fetch_plan_data, fetch_user_data,
                                   fetch_user_id, validate_user)
@@ -12,20 +13,112 @@ logger = logging.getLogger(__name__)
 
 
 def LoginPage(page: ft.Page):
-    username_field = ft.TextField(label="Usuário", width=300, border_color=ft.Colors.BLUE)
-    password_field = ft.TextField(label="Senha", width=300, border_color=ft.Colors.BLUE, password=True)
-    status_text = ft.Text("", color=ft.Colors.RED)
-    login_button = ft.ElevatedButton("Entrar", bgcolor=ft.Colors.BLUE, color=ft.Colors.WHITE)
-    register_button = ft.TextButton("Cadastrar", on_click=lambda _: page.go("/register"))
-    activate_button = ft.TextButton("Ativar Conta", on_click=lambda _: page.go("/activation"))
+    lottie_url = os.getenv("LOTTIE_LOGIN")
+    
+    login_lottie = fl.Lottie(
+        src=lottie_url,
+        width=400,
+        height=400,
+        repeat=True,
+        animate=True,
+        background_loading=True,
+        filter_quality=ft.FilterQuality.HIGH,
+        fit=ft.ImageFit.CONTAIN,
+    )
+
+    welcome_text = ft.Text(
+        "Bora organizar as finanças e mandar ver nas cobranças!",
+        size=18,
+        color=ft.Colors.BLUE_GREY_700,
+        weight=ft.FontWeight.W_500,
+        text_align=ft.TextAlign.CENTER,
+    )
+
+    username_field = ft.TextField(
+        label="Usuário",
+        width=320,
+        border="underline",
+        filled=True,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_GREY),
+        border_color=ft.Colors.BLUE_600,
+        focused_border_color=ft.Colors.BLUE_400,
+        cursor_color=ft.Colors.BLUE_400,
+        text_size=16,
+        capitalization="characters",
+    )
+    password_field = ft.TextField(
+        label="Senha/Code",
+        width=320,
+        border="underline",
+        filled=True,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLUE_GREY),
+        border_color=ft.Colors.BLUE_600,
+        focused_border_color=ft.Colors.BLUE_400,
+        cursor_color=ft.Colors.BLUE_400,
+        text_size=16,
+        password=True,
+        can_reveal_password=True,
+    )
+    status_text = ft.Text("", color=ft.Colors.RED_400, size=14, italic=True)
+
+    login_button = ft.ElevatedButton(
+        "Entrar",
+        style=ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.HOVERED: ft.Colors.BLUE_500,
+                ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
+            },
+            color=ft.Colors.WHITE,
+            elevation={"pressed": 2, "": 5},
+            animation_duration=300,
+            shape=ft.RoundedRectangleBorder(radius=8),
+        ),
+        width=320,
+        height=50,
+    )
+
+    register_row = ft.Row(
+        [
+            ft.Text("Ainda não possui uma conta?", size=14, color=ft.Colors.BLUE_GREY_600),
+            ft.TextButton(
+                "Registre aqui",
+                style=ft.ButtonStyle(
+                    color={
+                        ft.ControlState.HOVERED: ft.Colors.BLUE_400,
+                        ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
+                    },
+                ),
+                on_click=lambda _: page.go("/register")
+            ),
+        ],
+        spacing=5,
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+    activate_row = ft.Row(
+        [
+            ft.Text("Já tem conta, mas não ativou?", size=14, color=ft.Colors.BLUE_GREY_600),
+            ft.TextButton(
+                "Ative aqui",
+                style=ft.ButtonStyle(
+                    color={
+                        ft.ControlState.HOVERED: ft.Colors.BLUE_400,
+                        ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
+                    },
+                ),
+                on_click=lambda _: page.go("/activation")
+            ),
+        ],
+        spacing=5,
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
 
     def show_success_and_redirect(route, message="Sucesso!"):
         success_dialog = ft.AlertDialog(
             content=ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN),
-                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN_400),
+                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400)
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -46,7 +139,7 @@ def LoginPage(page: ft.Page):
 
     def show_loading():
         loading_dialog = ft.AlertDialog(
-            content=ft.Container(content=ft.ProgressRing(), alignment=ft.alignment.center),
+            content=ft.Container(content=ft.ProgressRing(color=ft.Colors.BLUE_400), alignment=ft.alignment.center),
             bgcolor=ft.Colors.TRANSPARENT,
             modal=True,
             disabled=True,
@@ -79,7 +172,6 @@ def LoginPage(page: ft.Page):
                 user_data = fetch_user_data(user_id, page)
                 plan_id = user_data.get("plan_id", 1)
                 plan_data = fetch_plan_data(plan_id, page) or {"name": "basic"}
-                # Seta tudo no Client Storage
                 page.client_storage.set(f"{prefix}username", username)
                 page.client_storage.set(f"{prefix}user_id", user_id)
                 page.client_storage.set(f"{prefix}session_expiry", (datetime.now(
@@ -107,25 +199,44 @@ def LoginPage(page: ft.Page):
     login_button.on_click = login
 
     page.clean()
-    form_card = ft.Card(
-        content=ft.Container(
-            content=ft.Column(
+    layout_login = ft.ResponsiveRow(
+        controls=[
+            ft.Row(
+                controls=[welcome_text],
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            # Lado esquerdo: Lottie
+            ft.Column(
+                col={"sm": 6, "md": 5, "lg": 4},  
                 controls=[
-                    ft.Text("Login", size=24, weight=ft.FontWeight.BOLD),
+                    login_lottie,
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            # Lado direito: Formulário de login
+            ft.Column(
+                col={"sm": 6, "md": 5, "lg": 4},
+                controls=[
+                    ft.Container(height=20),
                     username_field,
                     password_field,
                     status_text,
                     login_button,
-                    ft.Row([register_button, activate_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Container(height=15),
+                    register_row,
+                    activate_row,
                 ],
-                spacing=15,
+                alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=15,
             ),
-            padding=20,
-        ),
-        elevation=8,
-        width=350,
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        columns=12,
     )
+
     page.update()
 
-    return ft.Container(content=form_card)
+    return layout_login
