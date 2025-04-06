@@ -139,14 +139,22 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         code = upgrade_code_field.value.strip()
         if not code:
             logger.warning(f"Usuário {username} tentou aplicar mudança sem código")
-            feedback_text.value = "Insira o código, parceiro!"
+            feedback_text.value = "Insira o código"
             page.overlay.append(ft.SnackBar(ft.Text("Faltou o código, amigo!"), bgcolor=ft.Colors.RED))
             page.update()
             return
         logger.info(f"Tentando aplicar mudança para {username} com código {code}")
         request = read_supabase("upgrade_requests", f"?user_id=eq.{user_id}&code=eq.{code}&status=eq.pending", page)
-        if request and isinstance(request, list) and len(request) > 0:
-            plan_id = request[0].get("plan_id")
+
+        if isinstance(request, dict):
+            request_list = [request]
+        elif isinstance(request, list):
+            request_list = request
+        else:
+            request_list = []
+
+        if request_list and len(request_list) > 0:
+            plan_id = request_list[0].get("plan_id")
             selected_plan = next((p for p in plans_data if p["id"] == plan_id), None)
             if selected_plan:
                 logger.info(f"Mudança válida encontrada: plano {selected_plan['name']} para {username}")
@@ -154,16 +162,19 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                     "plan_id": selected_plan["id"], "messages_sent": 0, "pdfs_processed": 0,
                     "data_expiracao": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
                 }, method="patch", page=page):
-                    if write_supabase(f"upgrade_requests?id=eq.{request[0]['id']}", {"status": "approved"}, method="patch", page=page):
+                    if write_supabase(f"upgrade_requests?id=eq.{request_list[0]['id']}", {"status": "approved"}, method="patch", page=page):
                         page.client_storage.set(f"{prefix}messages_sent", 0)
                         page.client_storage.set(f"{prefix}pdfs_processed", 0)
                         page.client_storage.set(f"{prefix}user_plan", selected_plan["name"])
                         app_state["user_plan"] = selected_plan["name"]
                         action = "renovado" if selected_plan["name"] == current_plan["name"] else "atualizado"
-                        feedback_text.value = f"Plano {action} para {selected_plan['name']}!"
+                        feedback_text.value = f"Plano {action} para {selected_plan['name']}! "
                         page.overlay.append(ft.SnackBar(
                             ft.Text(f"Beleza! Teu plano foi {action} pra {selected_plan['name']}"), bgcolor=ft.Colors.GREEN))
                         logger.info(f"Mudança aplicada com sucesso para {username}: plano {selected_plan['name']}")
+                        page.go("/clients")
+                        logger.info(f"Redirecionando {username} para a página de clientes após mudança de plano")
+                        page.update()
                     else:
                         feedback_text.value = "Erro ao aprovar o pedido. Tenta de novo!"
                         page.overlay.append(ft.SnackBar(

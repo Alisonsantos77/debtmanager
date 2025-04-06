@@ -92,6 +92,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                 )
 
         page.views.clear()
+        page.title = "Login",
         page.views.append(
             ft.View(
                 route="/login",
@@ -120,7 +121,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             )
         elif page.route == "/register":
             page.title = "Registro"
-            page.window.height
+            page.window.height = 960.0
+            page.window.width = 1000.0
             page.views.append(
                 ft.View(
                     route="/register",
