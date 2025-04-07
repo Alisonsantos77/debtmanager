@@ -37,14 +37,15 @@ def verificar_status_usuario(page):
             user_id = page.client_storage.get(f"{prefix}user_id")
 
             # Redireciona se não houver user_id e o usuário estiver fora da tela de login ou cadastro
-            if not user_id and page.route not in ["/login", "/register"]:
-                logger.warning("Sem user_id e fora da rota de login/registro. Redirecionando...")
+            if not user_id and page.route not in ["/login", "/register", "/terms", "/activation"]:
+                logger.warning("Usuário não autenticado e fora das rotas de autenticação. Redirecionando para a página de login...")
                 page.client_storage.clear()
                 page.go("/login")
                 return
 
             # Se estiver nas telas públicas, apenas sai da verificação
-            if page.route in ["/login", "/register"]:
+            if page.route in ["/login", "/register", "/terms", "/activation"]:
+                logger.info("Rota pública. Não verificando status do usuário.")
                 return
 
             # Verifica se há status armazenado em cache (válido por 10 minutos)
@@ -135,8 +136,6 @@ def main(page: ft.Page):
     page.on_app_lifecycle_state_change = handle_lifecycle_change
 
     verificar_status_usuario(page)
-    if not page.client_storage.get("user_id") and page.route not in ["/login", "/register"]:
-        page.go("/login")
 
     page.update()
 

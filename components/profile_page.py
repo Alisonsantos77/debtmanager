@@ -119,9 +119,9 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                           {"user_id": user_id, "plan_id": next(p["id"] for p in plans_data if p["name"] == new_plan),
                            "code": change_code, "status": "pending"}, page=page):
             if send_plan_change_request(username, current_email, current_plan["name"], new_plan, change_code, is_renewal):
-                feedback_text.value = f"Pedido enviado! Código: {change_code}"
+                feedback_text.value = "Pedido enviado! Aguarde confirmação do suporte."
                 page.overlay.append(ft.SnackBar(
-                    ft.Text(f"Solicitação de {action} enviada! Código: {change_code}"), bgcolor=ft.Colors.GREEN))
+                    ft.Text(f"Solicitação de {action} enviada!"), bgcolor=ft.Colors.GREEN))
                 logger.info(f"Solicitação de {action} salva e email enviado para {username}")
             else:
                 feedback_text.value = f"Deu ruim no email de {action}. Tenta de novo!"

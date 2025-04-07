@@ -1,13 +1,12 @@
 import logging
 import os
+import flet as ft
+import flet_lottie as fl
+from dotenv import load_dotenv
 import random
 import smtplib
 from email.mime.text import MIMEText
 from time import sleep
-
-import flet as ft
-import flet_lottie as fl
-from dotenv import load_dotenv
 from flet.security import encrypt
 
 from utils.supabase_utils import write_supabase
@@ -19,6 +18,7 @@ SUPPORT_EMAIL = "Alisondev77@hotmail.com"
 SECRET_KEY = os.getenv("MY_APP_SECRET_KEY")
 LOTTIE_REGISTER = os.getenv("LOTTIE_REGISTER")
 logger = logging.getLogger(__name__)
+
 
 class PlanCard(ft.Card):
     def __init__(self, plan_name: str, messages: str, pdfs: str, price: str, description: str, bgcolor: str, letter: str):
@@ -41,6 +41,7 @@ class PlanCard(ft.Card):
 
 def RegisterPage(page: ft.Page):
     page.scroll = ft.ScrollMode.HIDDEN
+    register_btn = ft.Ref[ft.ElevatedButton]()
 
     username_field = ft.TextField(
         label="Username",
@@ -56,7 +57,7 @@ def RegisterPage(page: ft.Page):
         focused_border_color=ft.Colors.BLUE,
         border_radius=10,
         keyboard_type="email",
-        prefix_icon=ft.icons.EMAIL
+        prefix_icon=ft.icons.EMAIL,
     )
     plan_dropdown = ft.Dropdown(
         label="Escolher Plano",
@@ -71,9 +72,21 @@ def RegisterPage(page: ft.Page):
         focused_border_color=ft.Colors.BLUE_400
     )
     status_text = ft.Text("", color=ft.Colors.RED)
+    # Checkbox para Termos
+    terms_checkbox = ft.Checkbox(
+        label="Li e aceito os Termos de Uso e a Política de Privacidade",
+        value=False,
+    )
+    terms_link = ft.TextButton(
+        "Leia aqui",
+        style=ft.ButtonStyle(color=ft.Colors.BLUE_700),
+        on_click=lambda _: page.go("/terms")
+    )
+    terms_row = ft.Column([terms_checkbox, terms_link], alignment=ft.MainAxisAlignment.CENTER,
+                          horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
     register_button = ft.ElevatedButton(
         "Registrar",
-        bgcolor=ft.Colors.BLUE,
+        bgcolor=ft.Colors.GREY_400,
         color=ft.Colors.WHITE,
         width=300,
         height=50,
@@ -81,6 +94,8 @@ def RegisterPage(page: ft.Page):
             elevation=2,
             shape=ft.RoundedRectangleBorder(radius=5),
         ),
+        disabled=True,
+        ref=register_btn
     )
 
     plans_data = {
@@ -129,7 +144,25 @@ def RegisterPage(page: ft.Page):
         page.close(dialog)
         page.update()
 
+    def update_button(e):
+        if terms_checkbox.value:
+            register_btn.current.disabled = False
+            register_btn.current.bgcolor = ft.Colors.BLUE
+            register_btn.current.color = ft.Colors.WHITE
+        else:
+            register_btn.current.disabled = True
+            register_btn.current.bgcolor = ft.Colors.GREY_400
+            register_btn.current.color = ft.Colors.WHITE
+        page.update()
+
+    terms_checkbox.on_change = update_button
+
     def register_user(e):
+        if not terms_checkbox.value:
+            status_text.value = "Você precisa aceitar os Termos de Uso e a Política de Privacidade!"
+            page.update()
+            return
+
         username = username_field.value.strip()
         email = email_field.value.strip()
         plan = plan_dropdown.value
@@ -176,14 +209,15 @@ def RegisterPage(page: ft.Page):
                 "activation_code": encrypted_code,
                 "plan_id": plans_data[plan]["id"],
                 "messages_sent": 0,
-                "pdfs_processed": 0
+                "pdfs_processed": 0,
+                "accepted_terms": True
             }
         ):
             page.client_storage.set("username", username)
             page.client_storage.set("plan_id", plans_data[plan]["id"])
             hide_loading(loading_dialog)
             show_success_and_redirect(
-                "/activation", f"Registro enviado! Código: {activation_code}\nAguarde ativação pelo suporte.")
+                "/activation", f"Registro enviado! Aguarde ativação pelo suporte.")
         else:
             hide_loading(loading_dialog)
             status_text.value = "Erro ao registrar."
@@ -209,6 +243,7 @@ def RegisterPage(page: ft.Page):
             username_field,
             email_field,
             plan_dropdown,
+            terms_row,
             register_button,
             status_text,
         ],
@@ -218,7 +253,6 @@ def RegisterPage(page: ft.Page):
         width=400
     )
 
-    # Linha com Lottie e formulário
     top_row = ft.Row(
         [
             lottie_container,

@@ -11,6 +11,7 @@ from components.login import LoginPage
 from components.navigation_drawer import create_drawer
 from components.profile_page import ProfilePage
 from components.register import RegisterPage
+from components.terms_page import TermsPage
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
 
@@ -92,7 +93,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                 )
 
         page.views.clear()
-        page.title = "Login",
+        page.title = "Login"
         page.views.append(
             ft.View(
                 route="/login",
@@ -151,6 +152,19 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER
                 )
             )
+        elif page.route == "/terms":
+            page.title = "Termos de Uso"
+            page.views.append(
+                ft.View(
+                    route="/terms",
+                    scroll=ft.ScrollMode.HIDDEN,
+                    appbar=ft.AppBar(
+                        title=ft.Text("Termos de Uso", size=20, weight=ft.FontWeight.BOLD),
+                        bgcolor=current_color_scheme.background,
+                        center_title=True,
+                    ),
+                    controls=[TermsPage(page)]
+                ))
         elif page.route == "/dashboard":
             page.title = "Dashboard"
             history = get_client_history(None)

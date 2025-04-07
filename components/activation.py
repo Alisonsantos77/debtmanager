@@ -2,10 +2,8 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from time import sleep
-import os
 import flet as ft
 import flet_lottie as fl
-
 from utils.supabase_utils import (fetch_plan_data, fetch_user_data,
                                   fetch_user_id, update_user_status,
                                   validate_user)
@@ -15,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 def ActivationPage(page: ft.Page):
     lottie_url = os.getenv("LOTTIE_ACTIVATION")
+    terms_checkbox_ref = ft.Ref[ft.Checkbox]()
+    activate_button_ref = ft.Ref[ft.ElevatedButton]()
     activation_lottie = fl.Lottie(
         src=lottie_url,
         width=400,
@@ -56,24 +56,33 @@ def ActivationPage(page: ft.Page):
         cursor_color=ft.Colors.BLUE_400,
         text_size=16,
         password=True,
-        can_reveal_password=True, 
+        can_reveal_password=True,
     )
     status_text = ft.Text("", color=ft.Colors.RED_400, size=14, italic=True)
-
+    terms_checkbox = ft.Checkbox(
+        label="Reafirmo que li e aceito os Termos de Uso e a Política de Privacidade",
+        value=False,
+        check_color=ft.Colors.BLUE_400,
+        ref=terms_checkbox_ref
+    )
+    terms_link = ft.TextButton(
+        "Leia aqui",
+        style=ft.ButtonStyle(color=ft.Colors.BLUE_700),
+        on_click=lambda _: page.go("/terms")
+    )
+    terms_row = ft.Column([terms_checkbox, terms_link], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
     activate_button = ft.ElevatedButton(
         "Ativar",
         style=ft.ButtonStyle(
-            bgcolor={
-                ft.ControlState.HOVERED: ft.Colors.BLUE_500,
-                ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
-            },
-            color=ft.Colors.WHITE,
-            elevation={"pressed": 2, "": 5},
+            bgcolor=ft.Colors.GREY_400,
+            color=ft.Colors.WHITE,            elevation={"pressed": 2, "": 5},
             animation_duration=300,
-            shape=ft.RoundedRectangleBorder(radius=8),
+            shape=ft.RoundedRectangleBorder(radius=5),
         ),
         width=320,
         height=50,
+        disabled=True,
+        ref=activate_button_ref,
     )
 
     login_row = ft.Row(
@@ -137,7 +146,27 @@ def ActivationPage(page: ft.Page):
         page.close(dialog)
         page.update()
 
+    def update_button(e):
+        if terms_checkbox.value:
+            activate_button_ref.current.disabled = False
+            activate_button_ref.current.bgcolor = ft.Colors.BLUE
+            activate_button_ref.current.color = ft.Colors.WHITE
+            activate_button_ref.current.update()
+        else:
+            activate_button_ref.current.disabled = True
+            activate_button_ref.current.bgcolor = ft.Colors.GREY_400
+            activate_button_ref.current.color = ft.Colors.WHITE
+            activate_button_ref.current.update()
+        page.update()
+
+    terms_checkbox.on_change = update_button
+
     def activate(e):
+        if not terms_checkbox.value:
+            status_text.value = "Você precisa aceitar os Termos de Uso e a Política de Privacidade!"
+            page.update()
+            return
+
         username = username_field.value.strip()
         code = activation_code_field.value.strip()
         if not username or not code:
@@ -180,7 +209,6 @@ def ActivationPage(page: ft.Page):
     page.clean()
     layout_activation = ft.ResponsiveRow(
         controls=[
-            # Lado esquerdo: Lottie
             ft.Column(
                 col={"sm": 6, "md": 5, "lg": 4},
                 controls=[
@@ -189,7 +217,6 @@ def ActivationPage(page: ft.Page):
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            # Lado direito: Formulário de ativação
             ft.Column(
                 col={"sm": 6, "md": 5, "lg": 4},
                 controls=[
@@ -197,6 +224,7 @@ def ActivationPage(page: ft.Page):
                     ft.Container(height=20),
                     username_field,
                     activation_code_field,
+                    terms_row,  # Adiciona o checkbox e o link
                     status_text,
                     activate_button,
                     ft.Container(height=15),
