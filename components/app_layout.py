@@ -78,21 +78,21 @@ def create_app_layout(page: ft.Page):
     username = page.client_storage.get(f"{prefix}username")
     if not username:
         logger.warning("Username não encontrado no client_storage. Redirecionando para login.")
-        CustomSnackBar("Parece que você não tá logado. Vamos pro login!", bgcolor=ft.colors.RED).show(page)
+        CustomSnackBar("Parece que você não tá logado. Vamos pro login!", bgcolor=ft.colors.ERROR).show(page)
         page.go("/login")
         return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     user_id = fetch_user_id(username, page)
     if not user_id:
         logger.error(f"User_id não encontrado para {username}. Redirecionando para login.")
-        CustomSnackBar("Não achei seu ID. Vamos tentar o login de novo?", bgcolor=ft.colors.RED).show(page)
+        CustomSnackBar("Não achei seu ID. Vamos tentar o login de novo?", bgcolor=ft.colors.ERROR).show(page)
         page.go("/login")
         return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     user_data = fetch_user_data(user_id, page)
     if not user_data:
         logger.error(f"Dados do usuário não carregados para {user_id}. Redirecionando para login.")
-        CustomSnackBar("Não consegui pegar seus dados. Tenta relogar?", bgcolor=ft.colors.RED).show(page)
+        CustomSnackBar("Não consegui pegar seus dados. Tenta relogar?", bgcolor=ft.colors.ERROR).show(page)
         page.go("/login")
         return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
@@ -254,7 +254,7 @@ def create_app_layout(page: ft.Page):
     async def send_single_alert(client):
         nonlocal last_sent, local_messages_sent
         if not client:
-            CustomSnackBar("Nenhum cliente selecionado.", bgcolor=ft.Colors.RED).show(page)
+            CustomSnackBar("Nenhum cliente selecionado.", bgcolor=ft.Colors.ERROR).show(page)
             return
         if not check_usage_limits("messages_sent"):
             update_usage_dialog()
@@ -269,7 +269,7 @@ def create_app_layout(page: ft.Page):
         success = message_manager.send_single_notification(client, message_body)
         if tile:
             tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
-                                    color=ft.Colors.GREEN if success else ft.Colors.RED)
+                                    color=ft.Colors.GREEN if success else ft.Colors.ERROR)
             page.update()
         if success:
             increment_usage("messages_sent")
@@ -288,7 +288,7 @@ def create_app_layout(page: ft.Page):
             show_message(client)
             update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
         else:
-            CustomSnackBar("Erro ao enviar mensagem.", bgcolor=ft.Colors.RED).show(page)
+            CustomSnackBar("Erro ao enviar mensagem.", bgcolor=ft.Colors.ERROR).show(page)
             dialogs["error_dialog"].open_dialog()
         logger.info(f"Envio para {client.name}: {'sucesso' if success else 'falha'}")
 
@@ -296,7 +296,7 @@ def create_app_layout(page: ft.Page):
         dialogs["bulk_send_dialog"].close_dialog()
         if not filtered_clients:
             logger.warning("Tentativa de envio em massa sem clientes")
-            CustomSnackBar("Nenhum cliente carregado.", bgcolor=ft.Colors.RED).show(page)
+            CustomSnackBar("Nenhum cliente carregado.", bgcolor=ft.Colors.ERROR).show(page)
             return
         remaining_messages = message_limit - local_messages_sent
         notified_clients = page.session.get("notified_clients")
@@ -369,9 +369,9 @@ def create_app_layout(page: ft.Page):
             update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
         except Exception as e:
             logger.error(f"Erro no envio em massa: {e}")
-            feedback_list.controls.append(ft.Text(f"Erro: {str(e)}", color=ft.Colors.RED))
+            feedback_list.controls.append(ft.Text(f"Erro: {str(e)}", color=ft.Colors.ERROR))
             dialogs["bulk_send_feedback_dialog"].dialog.actions[0].disabled = False
-            CustomSnackBar("Erro ao enviar para todos.", bgcolor=ft.Colors.RED).show(page)
+            CustomSnackBar("Erro ao enviar para todos.", bgcolor=ft.Colors.ERROR).show(page)
             dialogs["error_dialog"].open_dialog()
         logger.info(f"Envio em massa concluído: {success_count}/{total_clients} sucessos")
 
@@ -411,7 +411,7 @@ def create_app_layout(page: ft.Page):
 
         if not e.files:
             logger.warning("Nenhum arquivo selecionado.")
-            CustomSnackBar("Escolhe um PDF aí, mano!", bgcolor=ft.Colors.RED).show(page)
+            CustomSnackBar("Escolhe um PDF aí, mano!", bgcolor=ft.Colors.ERROR).show(page)
             return
 
         pdf_path = e.files[0].path
@@ -479,7 +479,7 @@ def create_app_layout(page: ft.Page):
 
         except Exception as e:
             logger.error(f"Erro ao processar PDF: {e}")
-            CustomSnackBar(f"Deu ruim: {str(e)}. Tenta outro PDF!", bgcolor=ft.Colors.RED).show(page)
+            CustomSnackBar(f"Ocorreu um erro: {str(e)}. Por favor, tente carregar outro PDF.", bgcolor=ft.Colors.ERROR).show(page)
             hide_dialog(loading_dialog)
             dialogs["error_dialog"].open_dialog()
 

@@ -51,7 +51,7 @@ def LoginPage(page: ft.Page):
         password=True,
         can_reveal_password=True,
     )
-    status_text = ft.Text("", color=ft.Colors.RED_400, size=14, italic=True)
+    status_text = ft.Text("", color=ft.Colors.ERROR, size=14, italic=True)
 
     login_button = ft.ElevatedButton(
         "Entrar",
@@ -181,6 +181,33 @@ def LoginPage(page: ft.Page):
         elif status == "pendente":
             hide_loading(loading_dialog)
             status_text.value = "Conta não ativada. Ative primeiro!"
+            page.update()
+        elif status == "inativo": 
+            hide_loading(loading_dialog)
+            status_text.value = "Sua conta está inativa! Fale com o suporte."
+            page.overlay.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.WARNING, color=ft.Colors.AMBER_700, size=20),
+                            ft.Text("Conta inativa", color=ft.Colors.AMBER_700, weight=ft.FontWeight.BOLD),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=5,
+                    ),
+                    padding=10,
+                    bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.GREY_900),
+                    border_radius=5,
+                    alignment=ft.alignment.center,
+                    width=200,
+                    animate_opacity=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
+                    top=page.height * 0.1,
+                    left=page.width / 2 - 100,
+                )
+            )
+            page.update()
+            sleep(3)
+            page.overlay.clear()
             page.update()
         else:
             hide_loading(loading_dialog)

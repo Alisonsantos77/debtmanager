@@ -27,8 +27,8 @@ def read_supabase(endpoint: str, query: str = "", page: ft.Page = None) -> dict:
     except requests.RequestException as e:
         logger.error(f"Erro ao ler do Supabase: {e}")
         if page:
-            page.overlay.append(ft.SnackBar(
-                ft.Text("Ops, algo deu errado ao carregar os dados. Tente de novo!"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Deu ruim ao carregar os dados. Tenta de novo?"), bgcolor=ft.colors.ERROR))
             page.update()
         return {}
 
@@ -49,8 +49,8 @@ def write_supabase(endpoint: str, data: dict, method="post", page: ft.Page = Non
     except requests.RequestException as e:
         logger.error(f"Erro ao escrever no Supabase: {e}")
         if page:
-            page.overlay.append(ft.SnackBar(
-                ft.Text("Deu ruim ao salvar os dados. Tenta novamente?"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Deu ruim ao atualizar os dados. Tenta de novo?"), bgcolor=ft.colors.ERROR))
             page.update()
         return False
 
@@ -62,7 +62,8 @@ def fetch_user_id(username: str, page: ft.Page = None) -> str:
     if not user_id:
         logger.error(f"User_id não encontrado para username: {username}")
         if page:
-            page.overlay.append(ft.SnackBar(ft.Text("Usuário não encontrado. Verifica o nome!"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Não consegui pegar seu ID. Tenta relogar?"), bgcolor=ft.colors.ERROR))
             page.update()
     return user_id
 
@@ -73,8 +74,8 @@ def fetch_user_data(user_id: str, page: ft.Page = None) -> dict:
     if not data:
         logger.error(f"Dados do usuário não encontrados para user_id: {user_id}")
         if page:
-            page.overlay.append(ft.SnackBar(
-                ft.Text("Não consegui pegar seus dados. Tenta relogar?"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Não consegui pegar seus dados. Tenta relogar?"), bgcolor=ft.colors.ERROR))
             page.update()
     return data
 
@@ -85,7 +86,8 @@ def fetch_plan_data(plan_id: int, page: ft.Page = None) -> dict:
     if not data:
         logger.error(f"Plano não encontrado para plan_id: {plan_id}")
         if page:
-            page.overlay.append(ft.SnackBar(ft.Text("Plano não encontrado. Algo tá estranho!"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Não consegui pegar os dados do plano. Tenta relogar?"), bgcolor=ft.colors.ERROR))
             page.update()
     return data
 
@@ -107,8 +109,8 @@ def validate_user(username: str, code: str, encrypted: bool = False, page: ft.Pa
     if not data:
         logger.warning(f"Usuário {username} não encontrado")
         if page:
-            page.overlay.append(ft.SnackBar(
-                ft.Text("Esse usuário não existe. Tá certo o nome?"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Usuário não encontrado. Tenta de novo!"), bgcolor=ft.colors.ERROR))
             page.update()
         return "not_found", None
     user = data
@@ -119,7 +121,8 @@ def validate_user(username: str, code: str, encrypted: bool = False, page: ft.Pa
             if decrypted_code != code:
                 logger.warning(f"Código inválido para {username}")
                 if page:
-                    page.overlay.append(ft.SnackBar(ft.Text("Código errado. Tenta outro!"), bgcolor=ft.colors.RED))
+                    page.open(ft.SnackBar(
+                        ft.Text("Código inválido. Tenta de novo!"), bgcolor=ft.colors.ERROR))
                     page.update()
                 return "invalid_code", None
         logger.info(f"Usuário {username} validado com status: {user['status']}")
@@ -127,8 +130,8 @@ def validate_user(username: str, code: str, encrypted: bool = False, page: ft.Pa
     except Exception as e:
         logger.error(f"Erro ao validar código para {username}: {e}")
         if page:
-            page.overlay.append(ft.SnackBar(
-                ft.Text("Algo deu errado ao validar. Tenta de novo!"), bgcolor=ft.colors.RED))
+            page.open(ft.SnackBar(
+                ft.Text("Erro ao validar código. Tenta de novo!"), bgcolor=ft.colors.ERROR))
             page.update()
         return "error", None
 
@@ -142,7 +145,8 @@ def update_user_status(username: str, status: str, extra_data: dict = None, page
     if success:
         logger.info("Status atualizado com sucesso")
         if page:
-            page.overlay.append(ft.SnackBar(ft.Text(f"Status atualizado pra {status}!"), bgcolor=ft.colors.GREEN))
+            page.open(ft.SnackBar(
+                ft.Text(f"Status de {username} atualizado para {status}"), bgcolor=ft.colors.GREEN))
             page.update()
     else:
         logger.error("Falha ao atualizar status")

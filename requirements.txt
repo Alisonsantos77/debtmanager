@@ -6,3 +6,4 @@ pytz
 requests
 twilio
 python-dotenv
+flet-lottie

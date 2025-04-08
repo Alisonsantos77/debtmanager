@@ -101,7 +101,7 @@ def main(page: ft.Page):
     def page_resized(e):
         print("New page size:", page.window.width, page.window.height)
 
-    page.on_resized = page_resized    # Campos do formulário
+    page.on_resized = page_resized
 
     cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF",
                    "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}

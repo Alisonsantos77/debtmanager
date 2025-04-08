@@ -71,8 +71,7 @@ def RegisterPage(page: ft.Page):
         border_color=ft.Colors.BLUE,
         focused_border_color=ft.Colors.BLUE_400
     )
-    status_text = ft.Text("", color=ft.Colors.RED)
-    # Checkbox para Termos
+    status_text = ft.Text("", color=ft.Colors.ERROR)
     terms_checkbox = ft.Checkbox(
         label="Li e aceito os Termos de Uso e a Política de Privacidade",
         value=False,

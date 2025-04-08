@@ -58,19 +58,7 @@ def ActivationPage(page: ft.Page):
         password=True,
         can_reveal_password=True,
     )
-    status_text = ft.Text("", color=ft.Colors.RED_400, size=14, italic=True)
-    terms_checkbox = ft.Checkbox(
-        label="Reafirmo que li e aceito os Termos de Uso e a Política de Privacidade",
-        value=False,
-        check_color=ft.Colors.BLUE_400,
-        ref=terms_checkbox_ref
-    )
-    terms_link = ft.TextButton(
-        "Leia aqui",
-        style=ft.ButtonStyle(color=ft.Colors.BLUE_700),
-        on_click=lambda _: page.go("/terms")
-    )
-    terms_row = ft.Column([terms_checkbox, terms_link], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5)
+    status_text = ft.Text("", color=ft.Colors.ERROR, size=14, italic=True)
     activate_button = ft.ElevatedButton(
         "Ativar",
         style=ft.ButtonStyle(
@@ -146,26 +134,8 @@ def ActivationPage(page: ft.Page):
         page.close(dialog)
         page.update()
 
-    def update_button(e):
-        if terms_checkbox.value:
-            activate_button_ref.current.disabled = False
-            activate_button_ref.current.bgcolor = ft.Colors.BLUE
-            activate_button_ref.current.color = ft.Colors.WHITE
-            activate_button_ref.current.update()
-        else:
-            activate_button_ref.current.disabled = True
-            activate_button_ref.current.bgcolor = ft.Colors.GREY_400
-            activate_button_ref.current.color = ft.Colors.WHITE
-            activate_button_ref.current.update()
-        page.update()
-
-    terms_checkbox.on_change = update_button
 
     def activate(e):
-        if not terms_checkbox.value:
-            status_text.value = "Você precisa aceitar os Termos de Uso e a Política de Privacidade!"
-            page.update()
-            return
 
         username = username_field.value.strip()
         code = activation_code_field.value.strip()
@@ -227,7 +197,6 @@ def ActivationPage(page: ft.Page):
                     ft.Container(height=20),
                     username_field,
                     activation_code_field,
-                    terms_row, 
                     status_text,
                     activate_button,
                     ft.Container(height=15),

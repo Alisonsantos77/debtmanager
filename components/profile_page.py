@@ -85,7 +85,7 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
 
     if not username or not user_id:
         logger.warning("Username ou user_id não encontrados no client_storage. Redirecionando para login.")
-        page.open(ft.SnackBar(ft.Text(f"Você não está logado!"), bgcolor=ft.Colors.RED))
+        page.open(ft.SnackBar(ft.Text(f"Você não está logado!"), bgcolor=ft.Colors.ERROR))
         page.go("/login")
         page.update()
         return ft.Container()
@@ -173,12 +173,12 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             else:
                 hide_loading(loading_dialog)
                 feedback_text.value = f"Deu ruim no email de {action}. Tenta de novo!"
-                page.open(ft.SnackBar(ft.Text(f"Erro ao enviar email de {action}. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                page.open(ft.SnackBar(ft.Text(f"Erro ao enviar email de {action}. Tenta novamente!"), bgcolor=ft.Colors.ERROR))
                 logger.error(f"Falha ao enviar email de {action} para {username}")
         else:
             hide_loading(loading_dialog)
             feedback_text.value = f"Erro ao salvar o pedido de {action}. Tenta de novo!"
-            page.open(ft.SnackBar(ft.Text(f"Falha ao salvar solicitação de {action}. Tenta novamente!"), bgcolor=ft.Colors.RED))
+            page.open(ft.SnackBar(ft.Text(f"Falha ao salvar solicitação de {action}. Tenta novamente!"), bgcolor=ft.Colors.ERROR))
             logger.error(f"Falha ao salvar solicitação de {action} no Supabase para {username}")
         page.update()
 
@@ -226,23 +226,23 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                     else:
                         hide_loading(loading_dialog)
                         feedback_text.value = "Erro ao aprovar o pedido. Tenta de novo!"
-                        page.open(ft.SnackBar(ft.Text("Erro ao aprovar o pedido. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                        page.open(ft.SnackBar(ft.Text("Erro ao aprovar o pedido. Tenta novamente!"), bgcolor=ft.Colors.ERROR))
                         logger.error(
                             f"Falha ao atualizar status da mudança para 'approved' no Supabase para {username}")
                 else:
                     hide_loading(loading_dialog)
                     feedback_text.value = "Erro ao atualizar o plano. Tenta de novo!"
-                    page.open(ft.SnackBar(ft.Text("Erro ao atualizar o plano. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                    page.open(ft.SnackBar(ft.Text("Erro ao atualizar o plano. Tenta novamente!"), bgcolor=ft.Colors.ERROR))
                     logger.error(f"Falha ao atualizar users_debt no Supabase para {username}")
             else:
                 hide_loading(loading_dialog)
                 feedback_text.value = "Plano não encontrado."
-                page.open(ft.SnackBar(ft.Text("Plano não encontrado!"), bgcolor=ft.Colors.RED))
+                page.open(ft.SnackBar(ft.Text("Plano não encontrado!"), bgcolor=ft.Colors.ERROR))
                 logger.error(f"Plano com ID {plan_id} não encontrado em plans_data para {username}")
         else:
             hide_loading(loading_dialog)
             feedback_text.value = "Código inválido ou solicitação não encontrada."
-            page.open(ft.SnackBar(ft.Text("Código inválido ou solicitação não encontrada!"), bgcolor=ft.Colors.RED))
+            page.open(ft.SnackBar(ft.Text("Código inválido ou solicitação não encontrada!"), bgcolor=ft.Colors.ERROR))
             logger.error(f"Requisição inválida ou não encontrada para código {code} do usuário {username}")
         page.update()
 
@@ -254,6 +254,36 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         PlanCard("Enterprise", "500 mensagens/mês", "30 PDFs/mês", "400,00",
                  "Domine suas notificações!", ft.Colors.RED_700, "E")
     ], alignment=ft.MainAxisAlignment.CENTER)
+    
+    def handle_close(e):
+        page.close(dlg_modal)
+        page.add(ft.Text(f"Modal dialog closed with action: {e.control.text}"))
+    
+    dlg_modal = ft.AlertDialog(
+        title=ft.Text("Confirmação de Mudança de Plano", size=20, weight=ft.FontWeight.BOLD),
+        content=ft.Text(f"Você tem certeza que deseja mudar seu plano", size=16),
+        actions=[
+            ft.TextButton("Não", on_click=handle_close),
+            ft.TextButton("Sim", on_click=request_plan_change),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+        on_dismiss=lambda e: page.add(
+            ft.Text("Modal dialog dismissed"),
+        ),
+    )
+    
+    dlg_renova = ft.AlertDialog(
+        title=ft.Text("Confirmação de Renovação de Plano", size=20, weight=ft.FontWeight.BOLD),
+        content=ft.Text(f"Você tem certeza que deseja renovar seu plano atual?", size=16),
+        actions=[
+            ft.TextButton("Não", on_click=lambda e: page.close(dlg_renova)),
+            ft.TextButton("Sim", on_click=lambda e: request_plan_change(e, is_renewal=True)),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+        on_dismiss=lambda e: page.add(
+            ft.Text("Modal dialog dismissed"),
+        ),
+    )
 
     social_icons = ft.Row(controls=[
         ft.IconButton(content=ft.Image(src="images/contact/icons8-whatsapp-48.png", width=40, height=40),
@@ -287,16 +317,17 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         ft.Row(
             alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[plan_dropdown,
-                      ft.ElevatedButton("Mudar Plano", on_click=request_plan_change, style=ft.ButtonStyle(
+                      ft.ElevatedButton("Mudar Plano", on_click=lambda e: page.open(dlg_modal), style=ft.ButtonStyle(
                           elevation=2,
                           shape=ft.RoundedRectangleBorder(radius=5),
                       )),
-                      ft.ElevatedButton("Renovar Plano Atual", on_click=lambda e: request_plan_change(e, is_renewal=True), style=ft.ButtonStyle(
+                      ft.ElevatedButton("Renovar Plano Atual", on_click=lambda e: page.open(dlg_renova), style=ft.ButtonStyle(
                           elevation=2,
                           shape=ft.RoundedRectangleBorder(radius=5),
                       ))
                       ]),
-        ft.Row([upgrade_code_field, ft.ElevatedButton("Aplicar Mudança", on_click=apply_plan_change, style=ft.ButtonStyle(
+        ft.Row(alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+               controls=[upgrade_code_field, ft.ElevatedButton("Aplicar Mudança", on_click=apply_plan_change, style=ft.ButtonStyle(
             elevation=2,
             shape=ft.RoundedRectangleBorder(radius=5),
         ))]),
@@ -304,9 +335,6 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         ft.Divider(),
         ft.Text("Contato", size=20, weight=ft.FontWeight.BOLD),
         social_icons,
-        ft.Divider(),
-        ft.Text("Desenvolvedor", size=20, weight=ft.FontWeight.BOLD),
-        ft.Text("Alison Santos", size=16),
     ], spacing=20, scroll=ft.ScrollMode.AUTO)
 
     return ft.Container(content=profile_content, padding=20)

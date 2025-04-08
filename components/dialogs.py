@@ -79,7 +79,7 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
     )
 
     error_dialog = CustomDialog(
-        ft.Text("Erro", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.RED),
+        ft.Text("Erro", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.ERROR),
         ft.Text("Ocorreu um erro ao processar sua solicitação. Tente novamente.",
                 size=16, color=current_color_scheme.on_surface),
         [ft.TextButton("Fechar", on_click=lambda e: error_dialog.close_dialog())]

@@ -271,6 +271,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
         page.views.append(
             ft.View(
                 route="/login",
+                appbar=create_appbar("Login"),
+                drawer=create_drawer(page, company_data),
                 controls=[LoginPage(page)],
                 vertical_alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER

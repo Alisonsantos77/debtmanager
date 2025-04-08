@@ -10,6 +10,7 @@ from flet.security import encrypt, decrypt
 import logging
 from datetime import datetime
 import flet as ft
+
 load_dotenv()
 
 # Configurando o logger
@@ -21,26 +22,30 @@ class PDFExtractor:
         self.pdf_path = pdf_path
         self.page = page
         self.client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-        self.MAX_TEXT_LENGTH = 2000  # Limite
+        self.MAX_TEXT_LENGTH = 10000  # Limite de caracteres pro Claude
         self.SECRET_KEY = os.getenv("MY_APP_SECRET_KEY")
+        logger.info(f"Iniciando PDFExtractor para {pdf_path}")
 
     def validate_pdf_path(self) -> bool:
         """Valida o caminho do PDF com checagens robustas."""
+        logger.info(f"Validando caminho do PDF: {self.pdf_path}")
         if not isinstance(self.pdf_path, str):
             logger.error(f"Caminho do PDF inválido: {self.pdf_path} (não é string)")
-            self.page.open(ft.SnackBar(ft.Text(f"Erro: Caminho do PDF inválido: {self.pdf_path} (não é string)", color=ft.colors.RED)))
+            self.page.open(ft.SnackBar(
+                ft.Text(f"Erro: Caminho do PDF inválido: {self.pdf_path} (não é string)", color=ft.colors.ERROR)))
             self.page.update()
             return False
 
         if not self.pdf_path.lower().endswith('.pdf'):
             logger.error(f"Arquivo não é PDF: {self.pdf_path}")
-            self.page.open(ft.SnackBar(ft.Text(f"Erro: O arquivo {self.pdf_path} não é um PDF!", color=ft.colors.RED)))
+            self.page.open(ft.SnackBar(ft.Text(f"Erro: O arquivo {self.pdf_path} não é um PDF!", color=ft.colors.ERROR)))
             self.page.update()
             return False
 
         if not os.path.exists(self.pdf_path):
             logger.error(f"Arquivo não encontrado: {self.pdf_path}")
-            self.page.open(ft.SnackBar(ft.Text(f"Erro: O arquivo {self.pdf_path} não foi encontrado!", color=ft.colors.RED)))
+            self.page.open(ft.SnackBar(
+                ft.Text(f"Erro: O arquivo {self.pdf_path} não foi encontrado!", color=ft.colors.ERROR)))
             self.page.update()
             return False
 
@@ -48,35 +53,36 @@ class PDFExtractor:
             with open(self.pdf_path, 'rb') as f:
                 if os.path.getsize(self.pdf_path) == 0:
                     logger.warning(f"PDF vazio: {self.pdf_path}")
-                    self.page.open(ft.SnackBar(ft.Text(f"Erro: O PDF {self.pdf_path} tá vazio!", color=ft.colors.RED)))
+                    self.page.open(ft.SnackBar(ft.Text(f"Erro: O PDF {self.pdf_path} tá vazio!", color=ft.colors.ERROR)))
                     self.page.update()
                     return False
-            logger.info(f"Caminho do PDF validado: {self.pdf_path}")
+            logger.info(f"Caminho do PDF validado com sucesso: {self.pdf_path}")
             return True
         except PermissionError as e:
             logger.error(f"Permissão negada ao abrir PDF: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Permissão negada ao abrir o PDF. Suporte: {e}", color=ft.colors.RED)))
+                ft.Text(f"Erro: Permissão negada ao abrir o PDF. Suporte: {e}", color=ft.colors.ERROR)))
             self.page.update()
             return False
         except Exception as e:
             logger.error(f"Erro inesperado ao validar PDF: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Algo deu errado ao abrir o PDF. Suporte: {e}", color=ft.colors.RED)))
+                ft.Text(f"Erro: Algo deu errado ao abrir o PDF. Suporte: {e}", color=ft.colors.ERROR)))
             self.page.update()
             return False
 
     def extract_text_from_pdf(self) -> str:
         """Extrai texto do PDF com tratamento robusto."""
+        logger.info(f"Extraindo texto do PDF: {self.pdf_path}")
         if not self.validate_pdf_path():
+            logger.warning("Validação do caminho falhou, retornando vazio")
             return ""
 
         try:
             doc = pp.open(self.pdf_path)
             if doc.page_count == 0:
                 logger.warning(f"PDF sem páginas: {self.pdf_path}")
-                self.page.open(ft.SnackBar(
-                    ft.Text("Erro: Esse PDF tá vazio ou sem páginas!", color=ft.colors.RED)))
+                self.page.open(ft.SnackBar(ft.Text("Erro: Esse PDF tá vazio ou sem páginas!", color=ft.colors.ERROR)))
                 self.page.update()
                 doc.close()
                 return ""
@@ -92,28 +98,29 @@ class PDFExtractor:
 
             if not text.strip():
                 logger.warning(f"PDF sem texto útil: {self.pdf_path}")
-                self.page.open(ft.SnackBar(
-                    ft.Text("Erro: Esse PDF não tem texto útil!", color=ft.colors.RED)))
+                self.page.open(ft.SnackBar(ft.Text("Erro: Esse PDF não tem texto útil!", color=ft.colors.ERROR)))
                 self.page.update()
                 return ""
 
-            logger.info(f"Texto extraído do PDF: {len(text)} caracteres")
-            return encrypt(text, self.SECRET_KEY)
+            logger.info(f"Texto extraído com sucesso: {len(text)} caracteres")
+            encrypted_text = encrypt(text, self.SECRET_KEY)
+            logger.debug(f"Texto criptografado: {len(encrypted_text)} bytes")
+            return encrypted_text
         except pp.PyMuPDFError as e:
             logger.error(f"Erro do PyMuPDF ao ler PDF: {e}")
-            self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Problema ao ler o PDF. Suporte: {e}", color=ft.colors.RED)))
+            self.page.open(ft.SnackBar(ft.Text(f"Erro: Problema ao ler o PDF. Suporte: {e}", color=ft.colors.ERROR)))
             self.page.update()
             return ""
         except Exception as e:
             logger.error(f"Erro inesperado ao extrair texto: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Algo deu errado ao extrair o texto. Suporte: {e}", color=ft.colors.RED)))
+                ft.Text(f"Erro: Algo deu errado ao extrair o texto. Suporte: {e}", color=ft.colors.ERROR)))
             self.page.update()
             return ""
 
     def validate_extracted_text(self, text: str) -> bool:
         """Valida se o texto extraído é relevante pra inadimplência."""
+        logger.info("Validando texto extraído")
         if not isinstance(text, str) or not text.strip():
             logger.warning("Texto extraído inválido ou vazio")
             return False
@@ -124,9 +131,7 @@ class PDFExtractor:
                 logger.warning("Texto descriptografado vazio")
                 return False
 
-            # Keywords principais de inadimplência
             keywords = ["inadimplente", "inadimplência", "atraso", "renegociado", "vencimento", "dívida", "pendente"]
-            # Keywords adicionais pra reforçar contexto financeiro
             financial_keywords = ["valor", "pagamento", "cliente", "cpf", "cnpj", "telefone"]
 
             has_main_keywords = any(keyword.lower() in decrypted_text.lower() for keyword in keywords)
@@ -137,68 +142,84 @@ class PDFExtractor:
                 return True
             else:
                 logger.warning("Texto não parece ser um relatório de inadimplência válido")
-                self.page.overlay.append(ft.SnackBar(
-                    ft.Text("Aviso: Esse PDF não parece ser um relatório de inadimplência!", color=ft.colors.YELLOW)))
+                self.page.open(ft.SnackBar(
+                    ft.Text("Erro: Esse PDF não parece ser um relatório de inadimplência!", color=ft.colors.ERROR)))
                 self.page.update()
                 return False
         except Exception as e:
             logger.error(f"Erro ao validar texto extraído: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Problema ao validar o texto extraído. Suporte: {e}", color=ft.colors.RED)))
+                ft.Text(f"Erro: Problema ao validar o texto extraído. Suporte: {e}", color=ft.colors.ERROR)))
             self.page.update()
             return False
 
     def extract_clients_with_claude(self, text: str) -> List[dict]:
-        """Extrai clientes usando Claude com tratamento de falhas."""
+        logger.info("Iniciando extração com Claude")
         if not self.validate_extracted_text(text):
+            logger.warning("Texto inválido pra extração, retornando vazio")
             return []
 
         try:
             decrypted_text = decrypt(text, self.SECRET_KEY)
-            prompt = (
-                "Você recebeu um relatório financeiro em português. Identifique tabelas ou listas de clientes pendentes. "
-                "As colunas podem incluir: Nome/Cliente, CPF/CNPJ, Valor/Dívida, Vencimento/Data, Status/Situação, Contato/Telefone. "
-                "Extraia os dados e retorne como um array JSON com os campos: "
-                "id (CPF/CNPJ, sem espaços, pontos ou traços), name (Nome/Cliente), debt_amount (Valor/Dívida, sem 'R$', convertido pra float), "
-                "due_date (Vencimento/Data, formato DD/MM/YYYY), status (Status/Situação, ex.: 'Em atraso'), "
-                "contact (Contato/Telefone, formato (XX) XXXXX-XXXX). "
-                "Se uma coluna estiver ausente ou com nome diferente, infira pelo contexto. "
-                "Retorne o resultado como array JSON dentro de um bloco Markdown (```json ... ```). "
-                "Se não houver dados válidos, retorne um array vazio. "
-                f"{decrypted_text[:self.MAX_TEXT_LENGTH]}"
-            )
-            message = self.client.messages.create(
-                model="claude-3-7-sonnet-20250219",
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            response_text = message.content[0].text
-            json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+            logger.debug(f"Texto descriptografado: {len(decrypted_text)} caracteres")
 
-            if not json_match:
-                logger.warning("Resposta do Claude não contém JSON válido")
-                self.page.open(ft.SnackBar(
-                    ft.Text("Erro: Resposta do Claude não contém JSON válido!", color=ft.colors.RED)))
-                self.page.update()
-                return []
+            # Divide o texto em pedaços com sobreposição pra não cortar tabelas
+            chunk_size = self.MAX_TEXT_LENGTH
+            overlap = 500  # Sobreposição pra garantir que linhas não sejam cortadas
+            chunks = [decrypted_text[i:i + chunk_size] for i in range(0, len(decrypted_text), chunk_size - overlap)]
+            clients_data = {}
 
-            try:
-                clients_data = json.loads(json_match.group(1))
-                if not isinstance(clients_data, list):
-                    logger.warning(f"JSON não é uma lista: {type(clients_data)}")
-                    return []
-                logger.info(f"Extraídos {len(clients_data)} clientes do Claude")
-                return clients_data
-            except json.JSONDecodeError as e:
-                logger.error(f"Erro ao parsear JSON do Claude: {e}")
-                self.page.open(ft.SnackBar(
-                    ft.Text(f"Erro: Problema ao interpretar o JSON do Claude. Suporte: {e}", color=ft.colors.RED)))
-                self.page.update()
-                return []
+            for i, chunk in enumerate(chunks):
+                if "Nome" in chunk:  # Heurística pra achar tabela
+                    logger.debug(f"Tabela possivelmente encontrada no chunk {i}: {len(chunk)} caracteres")
+                    prompt = (
+                        "You received a financial report in Portuguese. Identify tables or lists of pending clients. "
+                        "Columns may include: Nome/Cliente (Name), CPF/CNPJ (ID), Valor/Dívida (Debt Amount), Vencimento/Data (Due Date), "
+                        "Status/Situação (Status), Contato/Telefone (Contact). "
+                        "Extract the data and return it as a JSON array with the fields: "
+                        "id (CPF/CNPJ, remove spaces, dots, or dashes; if missing or empty, generate a temporary ID like 'TEMP_001', 'TEMP_002', etc.), "
+                        "name (Nome/Cliente), debt_amount (Valor/Dívida, remove 'R$', convert to float), "
+                        "due_date (Vencimento/Data, format DD/MM/YYYY; if invalid, set as 'PENDENTE'), "
+                        "status (Status/Situação, e.g., 'Em atraso'), contact (Contato/Telefone, format (XX) XXXXX-XXXX). "
+                        "Infer columns by context if labels are missing or different. "
+                        "Keep lines with invalid dates by setting due_date to 'PENDENTE'. "
+                        "Return the result as a JSON array in a Markdown block (```json ... ```). "
+                        "If no valid data or table is found, return an empty array. "
+                        f"{chunk}"
+                    )
+                    message = self.client.messages.create(
+                        model="claude-3-7-sonnet-20250219",
+                        max_tokens=2000,
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    response_text = message.content[0].text
+                    logger.debug(f"Resposta do Claude recebida no chunk {i}: {len(response_text)} caracteres")
+                    json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+
+                    if json_match:
+                        try:
+                            chunk_clients = json.loads(json_match.group(1))
+                            if isinstance(chunk_clients, list):
+                                for client in chunk_clients:
+                                    # Usa ID + nome como chave pra evitar duplicatas
+                                    client_key = f"{client['id']}_{client['name']}_{client['due_date']}"
+                                    clients_data[client_key] = client
+                                logger.info(f"Extraídos {len(chunk_clients)} clientes do chunk {i}")
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Erro ao parsear JSON do Claude no chunk {i}: {e}")
+                            self.page.open(ft.SnackBar(
+                                ft.Text(f"Erro: Problema ao interpretar o JSON do Claude no chunk {i}. Suporte: {e}", color=ft.colors.RED)))
+
+            clients_list = list(clients_data.values())
+            if not clients_list:
+                logger.info("Nenhum cliente extraído pelos chunks")
+            else:
+                logger.info(f"Total de {len(clients_list)} clientes extraídos dos chunks")
+            return clients_list
+
         except anthropic.APIError as e:
             logger.error(f"Erro na API do Anthropic: {e}")
-            self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Problema na API do Claude. Suporte: {e}", color=ft.colors.RED)))
+            self.page.open(ft.SnackBar(ft.Text(f"Erro: Problema na API do Claude. Suporte: {e}", color=ft.colors.RED)))
             self.page.update()
             return []
         except Exception as e:
@@ -209,21 +230,27 @@ class PDFExtractor:
             return []
 
     def validate_client_data(self, client_data: dict) -> Optional[dict]:
-        """Valida e sanitiza os dados de um cliente."""
+        """Valida e sanitiza os dados de um cliente com suporte a IDs temporários e telefones fixos."""
+        logger.info(f"Validando dados do cliente: {client_data}")
         required_fields = {"id", "name", "debt_amount", "due_date", "status", "contact"}
         if not isinstance(client_data, dict) or not all(field in client_data for field in required_fields):
-            logger.warning(f"Dados de cliente inválidos: {client_data}")
+            logger.warning(f"Dados de cliente inválidos ou incompletos: {client_data}")
             return None
 
         sanitized_data = {}
 
-        # Validação e sanitização do ID (CPF/CNPJ)
+        # Validação do ID (CPF/CNPJ ou TEMP_XXX)
         id_str = str(client_data["id"]).replace(" ", "").replace(".", "").replace("-", "").replace("/", "")
-        if not (11 <= len(id_str) <= 14 and id_str.isdigit()):
-            logger.warning(f"ID inválido: {client_data['id']}")
+        if id_str.startswith('TEMP_'):
+            sanitized_data["id"] = id_str
+            logger.info(f"ID temporário aceito: {id_str}")
+        elif 11 <= len(id_str) <= 14 and id_str.isdigit():
+            sanitized_data["id"] = id_str
+        else:
+            logger.warning(f"ID inválido: {id_str}")
             return None
-        sanitized_data["id"] = id_str
 
+        # Nome
         name = str(client_data["name"]).strip()
         if not name or len(name) < 2:
             logger.warning(f"Nome inválido: {name}")
@@ -243,12 +270,16 @@ class PDFExtractor:
 
         # Data de vencimento
         due_date = str(client_data["due_date"]).strip()
-        try:
-            datetime.strptime(due_date, "%d/%m/%Y")
-            sanitized_data["due_date"] = due_date
-        except ValueError:
-            logger.warning(f"Data de vencimento inválida: {due_date}")
-            return None
+        if due_date == "PENDENTE":
+            sanitized_data["due_date"] = "PENDENTE"
+            logger.warning(f"Data pendente para {name}: corrigir manualmente")
+        else:
+            try:
+                datetime.strptime(due_date, "%d/%m/%Y")
+                sanitized_data["due_date"] = due_date
+            except ValueError:
+                logger.warning(f"Data de vencimento inválida: {due_date}")
+                return None
 
         # Status
         status = str(client_data["status"]).strip().lower()
@@ -264,14 +295,22 @@ class PDFExtractor:
         if not (10 <= len(contact_clean) <= 11) or not contact_clean.isdigit():
             logger.warning(f"Contato inválido: {contact}")
             return None
-        formatted_contact = f"({contact_clean[:2]}) {contact_clean[2:7]}-{contact_clean[7:]}"
+        formatted_contact = f"({contact_clean[:2]}) {contact_clean[2:6 if len(contact_clean) == 10 else 7]}-{contact_clean[6 if len(contact_clean) == 10 else 7:]}"
         sanitized_data["contact"] = formatted_contact
+        # Checa se é celular (Twilio-compatible)
+        if re.match(r'^\(\d{2}\) 9\d{4}-\d{4}$', formatted_contact):
+            sanitized_data["twilio_compatible"] = True
+            logger.info(f"Telefone celular detectado: {formatted_contact}")
+        else:
+            sanitized_data["twilio_compatible"] = False
+            logger.warning(f"Telefone fixo detectado: {formatted_contact}")
 
-        logger.info(f"Dados do cliente validados: {sanitized_data}")
+        logger.info(f"Dados do cliente validados com sucesso: {sanitized_data}")
         return sanitized_data
 
     def extract_pending_data(self) -> List[PendingClient]:
         """Extrai dados de clientes pendentes com validação robusta."""
+        logger.info(f"Iniciando extração de dados pendentes do PDF: {self.pdf_path}")
         extracted_text = self.extract_text_from_pdf()
         if not extracted_text:
             logger.info("Nenhum texto extraído, retornando lista vazia")
@@ -297,4 +336,8 @@ class PDFExtractor:
                 logger.warning(f"Cliente descartado por validação: {client_data}")
 
         logger.info(f"Extração concluída: {len(clients)} clientes válidos")
+        if clients:
+            pendentes = sum(1 for c in clients if c.due_date == "PENDENTE")
+            if pendentes > 0:
+                logger.info(f"{pendentes} clientes com data pendente")
         return clients
