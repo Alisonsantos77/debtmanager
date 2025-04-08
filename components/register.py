@@ -57,7 +57,7 @@ def RegisterPage(page: ft.Page):
         focused_border_color=ft.Colors.BLUE,
         border_radius=10,
         keyboard_type="email",
-        prefix_icon=ft.icons.EMAIL,
+        prefix_icon=ft.Icons.EMAIL,
     )
     plan_dropdown = ft.Dropdown(
         label="Escolher Plano",
@@ -109,7 +109,7 @@ def RegisterPage(page: ft.Page):
             content=ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN),
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN),
                         ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN)
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,

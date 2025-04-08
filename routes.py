@@ -1,7 +1,8 @@
 import logging
 import os
-
 import flet as ft
+from datetime import datetime, timedelta
+import asyncio
 
 from components.activation import ActivationPage
 from components.app_layout import create_app_layout
@@ -14,6 +15,7 @@ from components.register import RegisterPage
 from components.terms_page import TermsPage
 from utils.database import get_client_history
 from utils.theme_utils import get_current_color_scheme
+from utils.supabase_utils import fetch_user_data
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
     prefix = os.getenv("PREFIX")
     saved_avatar = page.client_storage.get(f"{prefix}avatar")
     username = page.client_storage.get(f"{prefix}username")
+    user_id = page.client_storage.get(f"{prefix}user_id")
     URL_DICEBEAR = os.getenv("URL_DICEBEAR")
 
     def logout(e):
@@ -30,6 +33,91 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
         logger.info("Usuário deslogado e Client Storage limpo")
         page.go("/login")
         page.update()
+
+    async def get_client_storage_async(page, key, timeout=2):
+        """Busca assíncrona do client_storage com timeout."""
+        try:
+            loop = asyncio.get_running_loop()
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: page.client_storage.get(key)),
+                timeout=timeout
+            )
+            logger.debug(f"client_storage.get({key}) retornou: {result}")
+            return result
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout ao buscar {key} do client_storage")
+            return None
+        except Exception as e:
+            logger.error(f"Erro inesperado ao buscar {key} do client_storage: {e}")
+            return None
+
+    class CountDown(ft.Text):
+        def __init__(self, page: ft.Page):
+            super().__init__()
+            self.page = page
+            self.executando = False
+            self.value = "Carregando..."
+            self.expiration_date = None
+
+        def did_mount(self):
+            self.executando = True
+            self.page.run_task(self.iniciar_contador)
+
+        def will_unmount(self):
+            self.executando = False
+
+        async def iniciar_contador(self):
+            """Inicializa o contador com busca segura."""
+            prefix = os.getenv("PREFIX")
+            expiration_key = f"{prefix}data_expiracao"
+
+            # Tenta pegar do client_storage com timeout
+            expiration_str = await get_client_storage_async(self.page, expiration_key)
+
+            if not expiration_str and user_id:
+                logger.info("Data_expiracao não encontrada no client_storage, buscando no Supabase")
+                try:
+                    user_data = fetch_user_data(user_id, self.page)
+                    if user_data and "data_expiracao" in user_data:
+                        expiration_str = user_data.get("data_expiracao")
+                        self.page.client_storage.set(expiration_key, expiration_str)
+                        logger.info(f"Data_expiracao salva no client_storage: {expiration_str}")
+                    else:
+                        logger.warning("Nenhuma data_expiracao encontrada no Supabase")
+                except Exception as e:
+                    logger.error(f"Erro ao buscar dados do Supabase: {e}")
+
+            if not expiration_str:
+                self.value = "Sem expiração!"
+                self.update()
+                return
+
+            try:
+                self.expiration_date = datetime.fromisoformat(expiration_str.replace("Z", "+00:00"))
+                logger.info(f"Contador iniciado com expiration_date: {self.expiration_date}")
+                await self.atualizar_timer()
+            except (ValueError, TypeError) as e:
+                logger.error(f"Erro ao parsear data_expiracao: {e}")
+                self.value = "Data inválida!"
+                self.update()
+
+        async def atualizar_timer(self):
+            """Atualiza o contador em tempo real."""
+            while self.executando and self.expiration_date:
+                now = datetime.now(self.expiration_date.tzinfo)
+                segundos_restantes = int((self.expiration_date - now).total_seconds())
+
+                if segundos_restantes <= 0:
+                    self.value = "Expirado!"
+                    self.update()
+                    break
+
+                dias, resto_segundos = divmod(segundos_restantes, 86400)
+                horas, resto_segundos = divmod(resto_segundos, 3600)
+                minutos, segundos = divmod(resto_segundos, 60)
+                self.value = f"{dias}d {horas}h {minutos}m {segundos}s"
+                self.update()
+                await asyncio.sleep(1)
 
     def route_change(route):
         company_data.update({
@@ -40,8 +128,11 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             "plan": company_data.get("plan", "basic")
         })
 
+
         class create_appbar(ft.AppBar):
             def __init__(self, title):
+                countdown = CountDown(page) if user_id else ft.Text("Não logado", size=14)
+
                 super().__init__(
                     title=ft.Text(
                         f"{title}",
@@ -73,25 +164,108 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                             ),
                             items=[
                                 ft.PopupMenuItem(
-                                    text="Meu Perfil",
-                                    icon=ft.Icons.PERSON_OUTLINE,
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Icon(
+                                                name=ft.Icons.PERSON_4_SHARP,
+                                                size=20,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                            ft.Text(
+                                                value=username or "Usuário",
+                                                size=14,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                        ]
+                                    ),
                                     on_click=lambda e: page.go("/profile")
                                 ),
                                 ft.PopupMenuItem(
-                                    text="Alterar Tema",
-                                    icon=ft.Icons.WB_SUNNY_OUTLINED,
-                                    on_click=lambda e: app_state.get("toggle_theme", lambda: None)()
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Icon(
+                                                name=ft.Icons.CALENDAR_MONTH_ROUNDED,
+                                                size=20,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                            ft.Text(
+                                                value=page.client_storage.get(f"{prefix}user_plan") or "Plano Básico",
+                                                size=14,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                        ]
+                                    ),
+                                    disabled=True
                                 ),
                                 ft.PopupMenuItem(
-                                    text="Sair",
-                                    icon=ft.Icons.EXIT_TO_APP,
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Icon(
+                                                name=ft.Icons.TIMER,
+                                                size=20,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                            countdown
+                                        ]
+                                    ),
+                                    disabled=True
+                                ),
+                                ft.PopupMenuItem(
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Icon(
+                                                name=ft.Icons.WB_SUNNY_OUTLINED,
+                                                size=20,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                            ft.Text(
+                                                value="Alterar Tema",
+                                                size=14,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                        ]
+                                    ),
+                                    on_click=lambda e: app_state.get("toggle_theme", lambda: None)()
+                                ),
+                                ft.PopupMenuItem(),
+                                ft.PopupMenuItem(
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Icon(
+                                                name=ft.Icons.SETTINGS,
+                                                size=20,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                            ft.Text(
+                                                value="Perfil",
+                                                size=14,
+                                                color=current_color_scheme.primary,
+                                            ),
+                                        ]
+                                    ),
+                                    on_click=lambda e: page.go("/profile")
+                                ),
+                                ft.PopupMenuItem(
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Icon(
+                                                name=ft.Icons.LOGOUT_SHARP,
+                                                size=20,
+                                                color=ft.Colors.RED,
+                                            ),
+                                            ft.Text(
+                                                value="Sair",
+                                                size=14,
+                                                color=ft.Colors.RED,
+                                            ),
+                                        ]
+                                    ),
                                     on_click=logout
-                                )
+                                ),
                             ]
                         ),
                     ]
-                )
-
+        )
         page.views.clear()
         page.title = "Login"
         page.views.append(
@@ -103,9 +277,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             ))
 
         if page.route == "/clients":
-            # Cria o layout dinamicamente quando a rota é /clients
             layout, app_state_new = create_app_layout(page)
-            app_state.update(app_state_new)  # Atualiza o app_state com os novos dados
+            app_state.update(app_state_new)
             page.title = "Clientes"
             page.window.height = 720.0
             page.window.width = 1280.0

@@ -407,47 +407,82 @@ def create_app_layout(page: ft.Page):
 
     def process_pdf(e: ft.FilePickerResultEvent):
         nonlocal clients_list, filtered_clients, selected_client, current_page, local_pdfs_processed
+        logger.info(f"Processando PDF: {e.files[0].path if e.files else 'Nenhum'}")
+
         if not e.files:
-            logger.warning("Nenhum arquivo selecionado")
+            logger.warning("Nenhum arquivo selecionado.")
+            CustomSnackBar("Escolhe um PDF aí, mano!", bgcolor=ft.Colors.RED).show(page)
             return
+
+        pdf_path = e.files[0].path
         if not check_usage_limits("pdfs_processed"):
             logger.info(f"Limite de PDFs excedido: {local_pdfs_processed}/{pdf_limit}")
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             page.run_task(notify_limit_reached, "pdfs")
+            CustomSnackBar("Limite de PDFs atingido! Já avisei o suporte!", bgcolor=ft.Colors.YELLOW).show(page)
             return
-        pdf_path = e.files[0].path
-        logger.info(f"Processando PDF: {pdf_path}")
+
         extractor = PDFExtractor(pdf_path, page)
         clients_list.clear()
         filtered_clients.clear()
         loading_dialog = show_loading()
-        extracted_data = extractor.extract_pending_data()
-        logger.info(
-            f"Dados extraídos: {[(c.name, c.debt_amount, c.due_date, c.status, c.contact) for c in extracted_data]}")
-        clients_list.extend(extracted_data)
-        filtered_clients.extend(clients_list)
-        selected_client = None
-        current_page = 0
-        client_list_view.controls.clear()
-        messages_view.controls.clear()
-        increment_usage("pdfs_processed")
-        update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
-        update_client_list()
-        message_manager.generate_notifications(clients_list)
-        current_color_scheme_ = get_current_color_scheme(page)
-        messages_view.controls = [ft.Row(alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER, expand=True, controls=[
-                                         ft.Text("Clique em um cliente para visualizar detalhes e enviar mensagens", size=16, italic=True, color=current_color_scheme_.on_surface, text_align=ft.TextAlign.CENTER)])])]
-        hide_dialog(loading_dialog)
-        success_dialog = show_success("Extração concluída!")
 
-        async def delay_and_hide():
-            await asyncio.sleep(2)
-            hide_dialog(success_dialog)
-        page.run_task(delay_and_hide)
-        CustomSnackBar("Dados carregados com sucesso!").show(page)
-        usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
-        usage_display.color = current_color_scheme_.on_surface
+        try:
+            extracted_data = extractor.extract_pending_data()
+            if not extracted_data:
+                logger.warning("Nenhum cliente extraído.")
+                CustomSnackBar("Nenhum cliente válido no PDF. Tá faltando algo ou tá zoado!",
+                            bgcolor=ft.Colors.YELLOW).show(page)
+            else:
+                logger.info(f"Extraídos {len(extracted_data)} clientes!")
+                clients_list.extend(extracted_data)
+                filtered_clients.extend(clients_list)
+                CustomSnackBar(f"Beleza! {len(extracted_data)} clientes carregados!",
+                            bgcolor=ft.Colors.GREEN).show(page)
+
+            selected_client = None
+            current_page = 0
+            client_list_view.controls.clear()
+            messages_view.controls.clear()
+            increment_usage("pdfs_processed")
+            update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
+            update_client_list()
+            message_manager.generate_notifications(clients_list)
+
+            current_color_scheme_ = get_current_color_scheme(page)
+            messages_view.controls = [ft.Row(
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[ft.Column(
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    expand=True,
+                    controls=[ft.Text(
+                        "Clique em um cliente pra ver detalhes e mandar mensagens",
+                        size=16, italic=True, color=current_color_scheme_.on_surface,
+                        text_align=ft.TextAlign.CENTER
+                    )]
+                )]
+            )]
+
+            hide_dialog(loading_dialog)
+            success_dialog = show_success("PDF processado com sucesso!")
+
+            async def delay_and_hide():
+                await asyncio.sleep(2)
+                hide_dialog(success_dialog)
+            page.run_task(delay_and_hide)
+
+            usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
+            usage_display.color = current_color_scheme_.on_surface
+
+        except Exception as e:
+            logger.error(f"Erro ao processar PDF: {e}")
+            CustomSnackBar(f"Deu ruim: {str(e)}. Tenta outro PDF!", bgcolor=ft.Colors.RED).show(page)
+            hide_dialog(loading_dialog)
+            dialogs["error_dialog"].open_dialog()
+
         page.update()
 
     file_picker = ft.FilePicker(on_result=process_pdf)

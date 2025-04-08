@@ -179,6 +179,7 @@ def ActivationPage(page: ft.Page):
         if status == "pendente" and user:
             now = datetime.now(timezone.utc)
             session_expiry = now + timedelta(hours=24)
+            data_expiracao = now + timedelta(days=30)
             update_user_status(username, "ativo", {"data_expiracao": (now + timedelta(days=30)).isoformat()}, page)
             user_id = fetch_user_id(username, page)
             user_data = fetch_user_data(user_id, page)
@@ -191,6 +192,8 @@ def ActivationPage(page: ft.Page):
             page.client_storage.set(f"{prefix}user_plan", plan_data.get("name", "basic"))
             page.client_storage.set(f"{prefix}messages_sent", user_data.get("messages_sent", 0))
             page.client_storage.set(f"{prefix}pdfs_processed", user_data.get("pdfs_processed", 0))
+            page.client_storage.set(f"{prefix}data_expiracao", data_expiracao.isoformat()
+                                    )
             logger.info(f"Conta ativada para {username}. Dados salvos no client_storage.")
             hide_loading(loading_dialog)
             show_success_and_redirect("/clients", "Conta ativada! Bem-vindo!")
@@ -224,7 +227,7 @@ def ActivationPage(page: ft.Page):
                     ft.Container(height=20),
                     username_field,
                     activation_code_field,
-                    terms_row,  # Adiciona o checkbox e o link
+                    terms_row, 
                     status_text,
                     activate_button,
                     ft.Container(height=15),

@@ -92,6 +92,7 @@ def verificar_status_usuario(page):
 
 
 def main(page: ft.Page):
+    page.window.icon = "icon.png"
     page.window.height = 720.0
     page.window.min_height = 960.0
     page.window.max_height = 1080.0

@@ -26,13 +26,6 @@ def LoginPage(page: ft.Page):
         fit=ft.ImageFit.CONTAIN,
     )
 
-    # welcome_text = ft.Text(
-    #     "Bora organizar as finanças e mandar ver nas cobranças!",
-    #     size=18,
-    #     color=ft.Colors.BLUE_GREY_700,
-    #     weight=ft.FontWeight.W_500,
-    #     text_align=ft.TextAlign.CENTER,
-    # )
 
     username_field = ft.TextField(
         label="Usuário",
@@ -200,10 +193,6 @@ def LoginPage(page: ft.Page):
     page.clean()
     layout_login = ft.ResponsiveRow(
         controls=[
-            # ft.Row(
-            #     controls=[welcome_text],
-            #     alignment=ft.MainAxisAlignment.CENTER,
-            # ),
             # Lado esquerdo: Lottie
             ft.Column(
                 col={"sm": 6, "md": 5, "lg": 4},  

@@ -84,7 +84,7 @@ def create_clients_page(
         height=50,
         border_radius=10,
         suffix=ft.IconButton(
-            icon=ft.icons.CLEAR,
+            icon=ft.Icons.CLEAR,
             icon_color=current_color_scheme.primary,
             on_click=lambda e: [
                 setattr(search_field, 'value', ''),

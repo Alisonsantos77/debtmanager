@@ -66,20 +66,24 @@ def create_drawer(page: ft.Page, company_data: dict):
     # Criando o Drawer
     drawer = ft.NavigationDrawer(
         on_change=lambda e: handle_drawer_change(e, page),
+        selected_index=1,
         controls=[
             drawer_header,
             ft.Divider(),
             ft.NavigationDrawerDestination(
                 label="Perfil",
-                icon=ft.Icons.PERSON_OUTLINED
+                icon=ft.Icons.PERSON_OUTLINED,
+                selected_icon=ft.Icons.PERSON_2_SHARP,
             ),
             ft.NavigationDrawerDestination(
                 label="Clientes",
-                icon=ft.Icons.PEOPLE_OUTLINED
+                icon=ft.Icons.PEOPLE_OUTLINED,
+                selected_icon=ft.Icons.PEOPLE_SHARP,
             ),
             ft.NavigationDrawerDestination(
                 label="Dashboard",
-                icon=ft.Icons.DASHBOARD_OUTLINED
+                icon=ft.Icons.DASHBOARD_OUTLINED,
+                selected_icon=ft.Icons.DASHBOARD_SHARP,
             ),
         ]
     )

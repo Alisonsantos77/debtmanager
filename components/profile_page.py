@@ -5,6 +5,7 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from secrets import token_urlsafe
+from time import sleep
 
 import flet as ft
 from dotenv import load_dotenv
@@ -41,10 +42,50 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
     user_id = page.client_storage.get(f"{prefix}user_id")
     saved_avatar = page.client_storage.get(f"{prefix}avatar")
 
+    def show_success_and_redirect(route, message="Sucesso!"):
+        success_dialog = ft.AlertDialog(
+            content=ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN_400),
+                        ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400)
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                alignment=ft.alignment.center,
+            ),
+            bgcolor=ft.Colors.TRANSPARENT,
+            modal=True,
+            disabled=True,
+        )
+        page.dialog = success_dialog
+        page.open(success_dialog)
+        page.update()
+        sleep(2)
+        page.close(success_dialog)
+        page.go(route)
+        page.update()
+
+    def show_loading():
+        loading_dialog = ft.AlertDialog(
+            content=ft.Container(content=ft.ProgressRing(color=ft.Colors.BLUE_400), alignment=ft.alignment.center),
+            bgcolor=ft.Colors.TRANSPARENT,
+            modal=True,
+            disabled=True,
+        )
+        page.dialog = loading_dialog
+        page.open(loading_dialog)
+        page.update()
+        return loading_dialog
+
+    def hide_loading(dialog):
+        page.close(dialog)
+        page.update()
+
     if not username or not user_id:
         logger.warning("Username ou user_id não encontrados no client_storage. Redirecionando para login.")
-        page.overlay.append(ft.SnackBar(
-            ft.Text("Parece que você não tá logado. Vamos pro login!"), bgcolor=ft.Colors.RED))
+        page.open(ft.SnackBar(ft.Text(f"Você não está logado!"), bgcolor=ft.Colors.RED))
         page.go("/login")
         page.update()
         return ft.Container()
@@ -79,10 +120,13 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         avatar_img.current.update()
         page.client_storage.set(f"{prefix}avatar", novo_avatar)
         logger.info(f"Avatar alterado para {novo_avatar} pelo usuário {username}")
-        page.overlay.append(ft.SnackBar(ft.Text("Avatar atualizado com sucesso!"), bgcolor=ft.Colors.GREEN))
+
+
+        page.open(ft.SnackBar(ft.Text(f"Avatar atualizado!"), bgcolor=ft.Colors.GREEN))  
         page.update()
 
     def send_plan_change_request(username, email, current_plan, new_plan, code, is_renewal=False):
+        loading_dialog = show_loading()
         current_info = next(p for p in plans_data if p["name"] == current_plan)
         new_info = next(p for p in plans_data if p["name"] == new_plan)
         action = "Renovação" if is_renewal else "Mudança de Plano"
@@ -100,16 +144,19 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                 server.login(EMAIL_SENDER, EMAIL_PASSWORD)
                 server.send_message(msg)
             logger.info(f"Email de {action.lower()} enviado para {SUPPORT_EMAIL} por {username}")
+            hide_loading(loading_dialog)
             return True
         except Exception as e:
+            hide_loading(loading_dialog)
             logger.error(f"Erro ao enviar email de {action.lower()} para {username}: {e}")
             return False
 
     def request_plan_change(e, is_renewal=False):
+        loading_dialog = show_loading()
         new_plan = current_plan["name"] if is_renewal else plan_dropdown.value
         if not new_plan and not is_renewal:
             logger.warning(f"Usuário {username} tentou mudar plano sem selecionar um")
-            page.overlay.append(ft.SnackBar(ft.Text("Selecione um plano primeiro, parceiro!"), bgcolor=ft.Colors.RED))
+            page.open(ft.SnackBar(ft.Text(f"Escolha um plano!")))
             page.update()
             return
         change_code = token_urlsafe(16)
@@ -119,28 +166,29 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                           {"user_id": user_id, "plan_id": next(p["id"] for p in plans_data if p["name"] == new_plan),
                            "code": change_code, "status": "pending"}, page=page):
             if send_plan_change_request(username, current_email, current_plan["name"], new_plan, change_code, is_renewal):
+                hide_loading(loading_dialog)
                 feedback_text.value = "Pedido enviado! Aguarde confirmação do suporte."
-                page.overlay.append(ft.SnackBar(
-                    ft.Text(f"Solicitação de {action} enviada!"), bgcolor=ft.Colors.GREEN))
+                page.open(ft.SnackBar(ft.Text(f"Solicitação de {action} enviada!"), bgcolor=ft.Colors.GREEN))
                 logger.info(f"Solicitação de {action} salva e email enviado para {username}")
             else:
+                hide_loading(loading_dialog)
                 feedback_text.value = f"Deu ruim no email de {action}. Tenta de novo!"
-                page.overlay.append(ft.SnackBar(
-                    ft.Text(f"Erro ao enviar email pro suporte. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                page.open(ft.SnackBar(ft.Text(f"Erro ao enviar email de {action}. Tenta novamente!"), bgcolor=ft.Colors.RED))
                 logger.error(f"Falha ao enviar email de {action} para {username}")
         else:
+            hide_loading(loading_dialog)
             feedback_text.value = f"Erro ao salvar o pedido de {action}. Tenta de novo!"
-            page.overlay.append(ft.SnackBar(
-                ft.Text(f"Deu pau ao salvar teu pedido. Dá outra chance!"), bgcolor=ft.Colors.RED))
+            page.open(ft.SnackBar(ft.Text(f"Falha ao salvar solicitação de {action}. Tenta novamente!"), bgcolor=ft.Colors.RED))
             logger.error(f"Falha ao salvar solicitação de {action} no Supabase para {username}")
         page.update()
 
     def apply_plan_change(e):
+        loading_dialog = show_loading()
         code = upgrade_code_field.value.strip()
         if not code:
             logger.warning(f"Usuário {username} tentou aplicar mudança sem código")
             feedback_text.value = "Insira o código"
-            page.overlay.append(ft.SnackBar(ft.Text("Faltou o código, amigo!"), bgcolor=ft.Colors.RED))
+            page.open(ft.SnackBar(ft.Text(f"Código não pode ser vazio!")))
             page.update()
             return
         logger.info(f"Tentando aplicar mudança para {username} com código {code}")
@@ -169,31 +217,32 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
                         app_state["user_plan"] = selected_plan["name"]
                         action = "renovado" if selected_plan["name"] == current_plan["name"] else "atualizado"
                         feedback_text.value = f"Plano {action} para {selected_plan['name']}! "
-                        page.overlay.append(ft.SnackBar(
-                            ft.Text(f"Beleza! Teu plano foi {action} pra {selected_plan['name']}"), bgcolor=ft.Colors.GREEN))
+                        page.open(ft.SnackBar(ft.Text(f"Plano {action} com sucesso!"), bgcolor=ft.Colors.GREEN))
                         logger.info(f"Mudança aplicada com sucesso para {username}: plano {selected_plan['name']}")
-                        page.go("/clients")
+                        hide_loading(loading_dialog)
+                        show_success_and_redirect("/clients", f"Plano {action} com sucesso! Redirecionando para a página de clientes...")
                         logger.info(f"Redirecionando {username} para a página de clientes após mudança de plano")
                         page.update()
                     else:
+                        hide_loading(loading_dialog)
                         feedback_text.value = "Erro ao aprovar o pedido. Tenta de novo!"
-                        page.overlay.append(ft.SnackBar(
-                            ft.Text("Falha ao aprovar a mudança. Tenta outra vez!"), bgcolor=ft.Colors.RED))
+                        page.open(ft.SnackBar(ft.Text("Erro ao aprovar o pedido. Tenta novamente!"), bgcolor=ft.Colors.RED))
                         logger.error(
                             f"Falha ao atualizar status da mudança para 'approved' no Supabase para {username}")
                 else:
+                    hide_loading(loading_dialog)
                     feedback_text.value = "Erro ao atualizar o plano. Tenta de novo!"
-                    page.overlay.append(ft.SnackBar(
-                        ft.Text("Deu ruim ao atualizar teu plano. Tenta novamente!"), bgcolor=ft.Colors.RED))
+                    page.open(ft.SnackBar(ft.Text("Erro ao atualizar o plano. Tenta novamente!"), bgcolor=ft.Colors.RED))
                     logger.error(f"Falha ao atualizar users_debt no Supabase para {username}")
             else:
+                hide_loading(loading_dialog)
                 feedback_text.value = "Plano não encontrado."
-                page.overlay.append(ft.SnackBar(ft.Text("Esse plano tá perdido no limbo!"), bgcolor=ft.Colors.RED))
+                page.open(ft.SnackBar(ft.Text("Plano não encontrado!"), bgcolor=ft.Colors.RED))
                 logger.error(f"Plano com ID {plan_id} não encontrado em plans_data para {username}")
         else:
+            hide_loading(loading_dialog)
             feedback_text.value = "Código inválido ou solicitação não encontrada."
-            page.overlay.append(ft.SnackBar(
-                ft.Text("Código errado ou pedido não existe, parceiro!"), bgcolor=ft.Colors.RED))
+            page.open(ft.SnackBar(ft.Text("Código inválido ou solicitação não encontrada!"), bgcolor=ft.Colors.RED))
             logger.error(f"Requisição inválida ou não encontrada para código {code} do usuário {username}")
         page.update()
 
@@ -256,16 +305,8 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         ft.Text("Contato", size=20, weight=ft.FontWeight.BOLD),
         social_icons,
         ft.Divider(),
-        ft.Text("Termos de Uso e Política de Privacidade", size=20, weight=ft.FontWeight.BOLD),
-        ft.Text("Bem-vindo ao DebtManager!", size=16, weight=ft.FontWeight.BOLD),
-        ft.Text("O DebtManager é uma ferramenta de automação para envio de notificações de dívidas, projetada para otimizar a gestão financeira de empresas e usuários individuais. Ao utilizar este aplicativo, você concorda com os seguintes termos:"),
-        ft.Text("1. Uso Responsável: O DebtManager deve ser utilizado exclusivamente para fins legítimos e legais, como o envio de notificações de dívidas válidas. Qualquer uso indevido, incluindo spam ou assédio, resultará na suspensão da conta."),
-        ft.Text("2. Privacidade e Segurança: Seus dados pessoais e financeiros são protegidos conforme a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018). Utilizamos criptografia para armazenar informações sensíveis e não compartilhamos seus dados com terceiros sem consentimento explícito."),
-        ft.Text("3. Limites de Uso: Cada plano possui limites de mensagens e PDFs processados. Exceder esses limites requer upgrade de plano. Tentativas de burlar essas restrições podem levar ao bloqueio da conta."),
-        ft.Text("4. Pagamento e Upgrades: Os planos são pagos e os upgrades requerem validação manual via código enviado ao suporte. Não há reembolsos após a ativação do plano."),
-        ft.Text("5. Suporte e Responsabilidade: Oferecemos suporte técnico via email e WhatsApp. Não nos responsabilizamos por falhas causadas por uso incorreto do aplicativo ou por interrupções em serviços de terceiros (e.g., Twilio, Supabase)."),
-        ft.Text("6. Atualizações e Disponibilidade: O DebtManager pode receber atualizações que modifiquem funcionalidades. Reservamo-nos o direito de suspender o serviço para manutenção sem aviso prévio."),
-        ft.Text("Para dúvidas, entre em contato com nosso suporte em Alisondev77@hotmail.com ou via WhatsApp.")
+        ft.Text("Desenvolvedor", size=20, weight=ft.FontWeight.BOLD),
+        ft.Text("Alison Santos", size=16),
     ], spacing=20, scroll=ft.ScrollMode.AUTO)
 
     return ft.Container(content=profile_content, padding=20)

@@ -1,4 +1,5 @@
 import flet as ft
+
 from utils.theme_utils import get_current_color_scheme
 
 
@@ -128,6 +129,16 @@ Estamos aqui para ajudar você a organizar suas finanças com segurança!
 
     # Monta o conteúdo da página com Markdown
     terms_content = ft.Column([
+        ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[
+
+            ft.Container(
+                content=ft.Image(
+                    src="icon_full.png",
+                    width=600,
+                    height=600,
+                    fit=ft.ImageFit.CONTAIN,
+                )),
+        ]),
         ft.Markdown(
             terms_markdown,
             selectable=True,
