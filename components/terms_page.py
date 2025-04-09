@@ -133,7 +133,7 @@ Estamos aqui para ajudar você a organizar suas finanças com segurança!
 
             ft.Container(
                 content=ft.Image(
-                    src="icon_full.png",
+                    src="logo/icon_full.png",
                     width=200,
                     height=200,
                     fit=ft.ImageFit.CONTAIN,

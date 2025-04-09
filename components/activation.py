@@ -35,7 +35,7 @@ def ActivationPage(page: ft.Page):
     )
 
     username_field = ft.TextField(
-        label="Usuário",
+        label="Nome da Empresa",
         width=320,
         border="underline",
         filled=True,
@@ -62,14 +62,17 @@ def ActivationPage(page: ft.Page):
     activate_button = ft.ElevatedButton(
         "Ativar",
         style=ft.ButtonStyle(
-            bgcolor=ft.Colors.GREY_400,
-            color=ft.Colors.WHITE,            elevation={"pressed": 2, "": 5},
+            bgcolor={
+                ft.ControlState.HOVERED: ft.Colors.BLUE_500,
+                ft.ControlState.DEFAULT: ft.Colors.BLUE_700,
+            },
+            color=ft.Colors.WHITE,
+            elevation={"pressed": 2, "": 5},
             animation_duration=300,
             shape=ft.RoundedRectangleBorder(radius=5),
         ),
         width=320,
         height=50,
-        disabled=True,
         ref=activate_button_ref,
     )
 

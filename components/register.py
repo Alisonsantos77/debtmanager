@@ -8,6 +8,7 @@ import smtplib
 from email.mime.text import MIMEText
 from time import sleep
 from flet.security import encrypt
+import re
 
 from utils.supabase_utils import write_supabase
 
@@ -49,6 +50,7 @@ def RegisterPage(page: ft.Page):
         border_color=ft.Colors.BLUE,
         focused_border_color=ft.Colors.BLUE,
         border_radius=10,
+        disabled=True
     )
     email_field = ft.TextField(
         label="Email",
@@ -58,6 +60,7 @@ def RegisterPage(page: ft.Page):
         border_radius=10,
         keyboard_type="email",
         prefix_icon=ft.Icons.EMAIL,
+        disabled=True
     )
     plan_dropdown = ft.Dropdown(
         label="Escolher Plano",
@@ -69,7 +72,8 @@ def RegisterPage(page: ft.Page):
         value="basic",
         width=300,
         border_color=ft.Colors.BLUE,
-        focused_border_color=ft.Colors.BLUE_400
+        focused_border_color=ft.Colors.BLUE_400,
+        disabled=True
     )
     status_text = ft.Text("", color=ft.Colors.ERROR)
     terms_checkbox = ft.Checkbox(
@@ -143,18 +147,17 @@ def RegisterPage(page: ft.Page):
         page.close(dialog)
         page.update()
 
-    def update_button(e):
-        if terms_checkbox.value:
-            register_btn.current.disabled = False
-            register_btn.current.bgcolor = ft.Colors.BLUE
-            register_btn.current.color = ft.Colors.WHITE
-        else:
-            register_btn.current.disabled = True
-            register_btn.current.bgcolor = ft.Colors.GREY_400
-            register_btn.current.color = ft.Colors.WHITE
+    def update_form_state(e):
+        are_terms_accepted = terms_checkbox.value
+        username_field.disabled = not are_terms_accepted
+        email_field.disabled = not are_terms_accepted
+        plan_dropdown.disabled = not are_terms_accepted
+        register_btn.current.disabled = not are_terms_accepted
+        register_btn.current.bgcolor = ft.Colors.BLUE if are_terms_accepted else ft.Colors.GREY_400
+        register_btn.current.color = ft.Colors.WHITE
         page.update()
 
-    terms_checkbox.on_change = update_button
+    terms_checkbox.on_change = update_form_state
 
     def register_user(e):
         if not terms_checkbox.value:
@@ -167,6 +170,13 @@ def RegisterPage(page: ft.Page):
         plan = plan_dropdown.value
         if not username or not email or not plan:
             status_text.value = "Preencha todos os campos!"
+            page.update()
+            return
+
+        # Validação de email com regex
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            status_text.value = "Email inválido! Use o formato: nome@dominio.com"
             page.update()
             return
 

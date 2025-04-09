@@ -54,6 +54,7 @@ def create_drawer(page: ft.Page, company_data: dict):
                                     size=20,
                                     weight=ft.FontWeight.BOLD,
                                     color=current_color_scheme.primary,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
                                 ft.Text(
                                     "Gerencie suas dívidas",

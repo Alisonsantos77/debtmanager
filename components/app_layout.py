@@ -25,7 +25,7 @@ class ClientListTile(ft.ListTile):
         current_color_scheme = get_current_color_scheme(page)
         super().__init__(
             leading=ft.CircleAvatar(content=ft.Text(client.name[0]), bgcolor=current_color_scheme.primary),
-            title=ft.Text(client.name, color=current_color_scheme.primary),
+            title=ft.Text(client.name, color=current_color_scheme.primary, overflow=ft.TextOverflow.ELLIPSIS),
             subtitle=ft.Text(f"Valor: {client.debt_amount} | Vencimento: {client.due_date}",
                              color=current_color_scheme.on_surface),
             trailing=ft.IconButton(icon=ft.Icons.INFO, icon_color=current_color_scheme.primary, on_click=on_info_click),
@@ -76,23 +76,37 @@ def create_app_layout(page: ft.Page):
 
     prefix = "debtmanager."
     username = page.client_storage.get(f"{prefix}username")
+
+
     if not username:
         logger.warning("Username não encontrado no client_storage. Redirecionando para login.")
-        CustomSnackBar("Parece que você não tá logado. Vamos pro login!", bgcolor=ft.colors.ERROR).show(page)
+        CustomSnackBar(
+            content=ft.Text("Usuário não autenticado. Você será redirecionado para a página de login."),
+            bgcolor=ft.colors.ERROR,
+            duration=3000
+        ).show(page)
         page.go("/login")
         return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     user_id = fetch_user_id(username, page)
     if not user_id:
         logger.error(f"User_id não encontrado para {username}. Redirecionando para login.")
-        CustomSnackBar("Não achei seu ID. Vamos tentar o login de novo?", bgcolor=ft.colors.ERROR).show(page)
+        CustomSnackBar(
+            content=ft.Text("Identificador de usuário não encontrado. Por favor, tente fazer login novamente."),
+            bgcolor=ft.colors.ERROR,
+            duration=3000
+        ).show(page)
         page.go("/login")
         return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
     user_data = fetch_user_data(user_id, page)
     if not user_data:
         logger.error(f"Dados do usuário não carregados para {user_id}. Redirecionando para login.")
-        CustomSnackBar("Não consegui pegar seus dados. Tenta relogar?", bgcolor=ft.colors.ERROR).show(page)
+        CustomSnackBar(
+            content=ft.Text("Erro ao carregar os dados do usuário. Por favor, realize o login novamente."),
+            bgcolor=ft.colors.ERROR,
+            duration=3000
+        ).show(page)
         page.go("/login")
         return None, {"toggle_theme": lambda: None, "dialogs": {}, "clients_list": [], "filtered_clients": [], "update_client_list": lambda: None, "history": []}
 
@@ -253,10 +267,13 @@ def create_app_layout(page: ft.Page):
 
     async def send_single_alert(client):
         nonlocal last_sent, local_messages_sent
+        loading_dialog = show_loading()
         if not client:
+            hide_dialog(loading_dialog)
             CustomSnackBar("Nenhum cliente selecionado.", bgcolor=ft.Colors.ERROR).show(page)
             return
         if not check_usage_limits("messages_sent"):
+            hide_dialog(loading_dialog)
             update_usage_dialog()
             dialogs["usage_dialog"].open_dialog()
             await notify_limit_reached("messages")
@@ -291,7 +308,8 @@ def create_app_layout(page: ft.Page):
             CustomSnackBar("Erro ao enviar mensagem.", bgcolor=ft.Colors.ERROR).show(page)
             dialogs["error_dialog"].open_dialog()
         logger.info(f"Envio para {client.name}: {'sucesso' if success else 'falha'}")
-
+        hide_dialog(loading_dialog)
+        
     async def send_bulk_message():
         dialogs["bulk_send_dialog"].close_dialog()
         if not filtered_clients:
@@ -323,7 +341,7 @@ def create_app_layout(page: ft.Page):
             for idx, client in enumerate(eligible_clients[:clients_to_send]):
                 logger.info(f"Enviando para {client.name} ({client.contact})")
                 feedback_list.controls.append(
-                    ft.Text(f"Enviando para {client.name} ({client.contact})...", italic=True, color=current_color_scheme.on_surface))
+                    ft.Text(f"Enviando para {client.name} ({client.contact})...", italic=True, color=current_color_scheme.primary))
                 page.update()
                 try:
                     message_body = bulk_message_input.value.format(
@@ -334,7 +352,7 @@ def create_app_layout(page: ft.Page):
                 tile = next((t for t in client_list_view.controls if isinstance(
                     t, ClientListTile) and t.client == client), None)
                 success = message_manager.send_single_notification(client, message_body)
-                feedback_list.controls[-1] = ft.Row([ft.Text(f"{client.name} ({client.contact})", color=current_color_scheme.on_surface), ft.Icon(
+                feedback_list.controls[-1] = ft.Row([ft.Text(f"{client.name} ({client.contact})", color=current_color_scheme.primary), ft.Icon(
                     ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR)])
                 if tile:
                     tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR)
@@ -354,18 +372,18 @@ def create_app_layout(page: ft.Page):
             last_sent_ = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             increment_usage("messages_sent", success_count)
             feedback_list.controls.append(ft.Text(
-                f"Envio concluído às {last_sent_}! ({success_count}/{total_clients} enviados)", weight=ft.FontWeight.BOLD, color=current_color_scheme.on_surface))
+                f"Envio concluído às {last_sent_}! ({success_count}/{total_clients} enviados)", weight=ft.FontWeight.BOLD, color=current_color_scheme.primary))
             dialogs["bulk_send_feedback_dialog"].dialog.actions[0].disabled = False
             CustomSnackBar(f"Alertas enviados para {success_count} clientes às {last_sent_}!").show(page)
             update_usage_dialog()
             usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
-            usage_display.color = get_current_color_scheme(page).on_surface
+            usage_display.color = get_current_color_scheme(page).primary
             messages_view.controls = [ft.Text("Mensagens enviadas com sucesso!",
-                                              size=12, color=current_color_scheme.on_surface)]
+                                              size=12, color=current_color_scheme.primary)]
             if len(eligible_clients) > clients_to_send:
                 logger.info(f"{len(eligible_clients) - clients_to_send} clientes não enviados por limite")
                 feedback_list.controls.append(ft.Text(
-                    f"Nota: {len(eligible_clients) - clients_to_send} clientes excederam o limite.", color=current_color_scheme.on_surface))
+                    f"Nota: {len(eligible_clients) - clients_to_send} clientes excederam o limite.", color=current_color_scheme.primary))
             update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
         except Exception as e:
             logger.error(f"Erro no envio em massa: {e}")
@@ -378,7 +396,7 @@ def create_app_layout(page: ft.Page):
     def update_usage_dialog():
         current_color_scheme_ = get_current_color_scheme(page)
         usage_info = f"Mensagens Enviadas: {local_messages_sent}/{message_limit}\nPDFs Processados: {local_pdfs_processed}/{pdf_limit}"
-        dialogs["usage_dialog"].dialog.content = ft.Text(usage_info, size=16, color=current_color_scheme_.on_surface)
+        dialogs["usage_dialog"].dialog.content = ft.Text(usage_info, size=16, color=current_color_scheme_.primary)
         dialogs["usage_dialog"].dialog.title = ft.Text("Limite atingido!", size=20, weight=ft.FontWeight.BOLD)
         dialogs["usage_dialog"].dialog.actions = [ft.TextButton(
             "Fechar", on_click=lambda e: dialogs["usage_dialog"].close_dialog())]
@@ -411,7 +429,7 @@ def create_app_layout(page: ft.Page):
 
         if not e.files:
             logger.warning("Nenhum arquivo selecionado.")
-            CustomSnackBar("Escolhe um PDF aí, mano!", bgcolor=ft.Colors.ERROR).show(page)
+            CustomSnackBar("Por favor, selecione um PDF.", bgcolor=ft.Colors.ERROR).show(page)
             return
 
         pdf_path = e.files[0].path
@@ -432,14 +450,13 @@ def create_app_layout(page: ft.Page):
             extracted_data = extractor.extract_pending_data()
             if not extracted_data:
                 logger.warning("Nenhum cliente extraído.")
-                CustomSnackBar("Nenhum cliente válido no PDF. Tá faltando algo ou tá zoado!",
+                CustomSnackBar("Nenhum cliente válido encontrado no PDF. Verifique os dados e tente novamente.",
                             bgcolor=ft.Colors.YELLOW).show(page)
             else:
                 logger.info(f"Extraídos {len(extracted_data)} clientes!")
                 clients_list.extend(extracted_data)
                 filtered_clients.extend(clients_list)
-                CustomSnackBar(f"Beleza! {len(extracted_data)} clientes carregados!",
-                            bgcolor=ft.Colors.GREEN).show(page)
+                CustomSnackBar(f"Sucesso! {len(extracted_data)} clientes foram carregados com êxito!").show(page)
 
             selected_client = None
             current_page = 0
@@ -475,7 +492,7 @@ def create_app_layout(page: ft.Page):
             page.run_task(delay_and_hide)
 
             usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
-            usage_display.color = current_color_scheme_.on_surface
+            usage_display.color = current_color_scheme_.primary
 
         except Exception as e:
             logger.error(f"Erro ao processar PDF: {e}")

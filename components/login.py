@@ -28,7 +28,7 @@ def LoginPage(page: ft.Page):
 
 
     username_field = ft.TextField(
-        label="Usuário",
+        label="Nome da empresa",
         width=320,
         border="underline",
         filled=True,

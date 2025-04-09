@@ -102,7 +102,7 @@ def create_clients_page(
             ft.Column([
                 ft.Row([
                     search_field,
-                    filter_date_button
+                    filter_date_button,
                 ], alignment=ft.MainAxisAlignment.START, spacing=10),
                 selected_date_text,
                 client_list_view

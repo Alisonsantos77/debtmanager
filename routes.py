@@ -28,12 +28,30 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
     user_id = page.client_storage.get(f"{prefix}user_id")
     URL_DICEBEAR = os.getenv("URL_DICEBEAR")
 
+
     def logout(e):
         page.client_storage.clear()
         logger.info("Usuário deslogado e Client Storage limpo")
         page.go("/login")
         page.update()
-
+        
+    def handle_close(e):
+        page.close(dlg_modal)
+        page.add(ft.Text(f"Modal dialog closed with action: {e.control.text}"))
+        
+    dlg_modal = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Confirmação"),
+        content=ft.Text("Você realmente deseja sair?"),
+        actions=[
+            ft.TextButton("Não", on_click=handle_close),
+            ft.TextButton("Sim", on_click=logout),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+        on_dismiss=lambda e: page.add(
+            ft.Text("Modal dialog dismissed"),
+        ),
+    )
     async def get_client_storage_async(page, key, timeout=2):
         """Busca assíncrona do client_storage com timeout."""
         try:
@@ -175,6 +193,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                                 value=username or "Usuário",
                                                 size=14,
                                                 color=current_color_scheme.primary,
+                                                overflow=ft.TextOverflow.ELLIPSIS,
                                             ),
                                         ]
                                     ),
@@ -260,7 +279,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                             ),
                                         ]
                                     ),
-                                    on_click=logout
+                                    on_click=lambda e: page.open(dlg_modal),
                                 ),
                             ]
                         ),
@@ -271,8 +290,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
         page.views.append(
             ft.View(
                 route="/login",
-                appbar=create_appbar("Login"),
-                drawer=create_drawer(page, company_data),
                 controls=[LoginPage(page)],
                 vertical_alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER

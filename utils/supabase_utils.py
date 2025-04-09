@@ -146,7 +146,7 @@ def update_user_status(username: str, status: str, extra_data: dict = None, page
         logger.info("Status atualizado com sucesso")
         if page:
             page.open(ft.SnackBar(
-                ft.Text(f"Status de {username} atualizado para {status}"), bgcolor=ft.colors.GREEN))
+                ft.Text(f"Status de {username} atualizado para {status}")))
             page.update()
     else:
         logger.error("Falha ao atualizar status")
