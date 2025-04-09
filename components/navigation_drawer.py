@@ -84,7 +84,6 @@ def create_drawer(page: ft.Page, company_data: dict):
         selected_index=1,
         controls=[
             drawer_header,
-            ft.Divider(thickness=1, color=ft.Colors.GREY_300),
             ft.NavigationDrawerDestination(
                 label="Perfil",
                 icon=ft.Icons.PERSON_OUTLINE,

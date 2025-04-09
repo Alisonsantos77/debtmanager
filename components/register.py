@@ -45,7 +45,7 @@ def RegisterPage(page: ft.Page):
     register_btn = ft.Ref[ft.ElevatedButton]()
 
     username_field = ft.TextField(
-        label="Username",
+        label="Nome da empresa",
         width=300,
         border_color=ft.Colors.BLUE,
         focused_border_color=ft.Colors.BLUE,
@@ -187,7 +187,7 @@ def RegisterPage(page: ft.Page):
         try:
             msg = MIMEText(
                 f"Solicitação de Registro e Ativação:\n"
-                f"Usuário: {username}\n"
+                f"Empresa: {username}\n"
                 f"Email: {email}\n"
                 f"Plano Escolhido: {plan}\n"
                 f"Limites: {plan_info['message_limit']} mensagens/mês, {plan_info['pdf_limit']} PDFs/mês\n"
@@ -248,7 +248,7 @@ def RegisterPage(page: ft.Page):
 
     form_container = ft.Column(
         [
-            ft.Text("Registrar Novo Usuário", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text("Registre sua empresa", size=24, weight=ft.FontWeight.BOLD),
             username_field,
             email_field,
             plan_dropdown,

@@ -320,7 +320,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                 ft.View(
                     route="/register",
                     appbar=ft.AppBar(
-                        title=ft.Text("Registro", size=20, weight=ft.FontWeight.BOLD),
                         bgcolor=ft.Colors.TRANSPARENT,
                         center_title=True,
                     ),

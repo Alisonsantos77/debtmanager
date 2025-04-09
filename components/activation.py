@@ -176,7 +176,7 @@ def ActivationPage(page: ft.Page):
             show_success_and_redirect("/login", "Redirecionando para login...")
         else:
             hide_loading(loading_dialog)
-            status_text.value = "Usuário não encontrado ou código inválido."
+            status_text.value = "Empresa não encontrada ou código inválido."
             logger.warning(f"Falha na ativação para {username}: status={status}")
             page.update()
 

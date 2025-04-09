@@ -110,7 +110,7 @@ def validate_user(username: str, code: str, encrypted: bool = False, page: ft.Pa
         logger.warning(f"Usuário {username} não encontrado")
         if page:
             page.open(ft.SnackBar(
-                ft.Text("Usuário não encontrado. Tenta de novo!"), bgcolor=ft.colors.ERROR))
+                ft.Text("Empresa não encontrada. Tenta de novo!"), bgcolor=ft.colors.ERROR))
             page.update()
         return "not_found", None
     user = data

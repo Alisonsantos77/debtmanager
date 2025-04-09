@@ -149,7 +149,7 @@ def LoginPage(page: ft.Page):
         username = username_field.value.strip()
         password = password_field.value.strip()
         if not username or not password:
-            status_text.value = "Preencha usuário e senha!"
+            status_text.value = "Preencha nome da empresa e senha!"
             page.update()
             return
 
