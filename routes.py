@@ -30,17 +30,18 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
 
 
     def logout(e):
-        page.client_storage.clear()
+        page.client_storage.clear()  # Limpa o armazenamento
+        page.views.clear()  # Limpa as views pra evitar cache
         logger.info("Usuário deslogado e Client Storage limpo")
+        page.close(dlg_modal)
         page.go("/login")
         page.update()
         
     def handle_close(e):
         page.close(dlg_modal)
-        page.add(ft.Text(f"Modal dialog closed with action: {e.control.text}"))
+        page.update()
         
     dlg_modal = ft.AlertDialog(
-        modal=True,
         title=ft.Text("Confirmação"),
         content=ft.Text("Você realmente deseja sair?"),
         actions=[
@@ -149,7 +150,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
 
         class create_appbar(ft.AppBar):
             def __init__(self, title):
-                countdown = CountDown(page) if user_id else ft.Text("Não logado", size=14)
+                countdown = CountDown(page) if user_id else ft.Text("Carregando em breve...", size=14)
 
                 super().__init__(
                     title=ft.Text(
@@ -185,15 +186,14 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                     content=ft.Row(
                                         controls=[
                                             ft.Icon(
-                                                name=ft.Icons.PERSON_4_SHARP,
+                                                name=ft.Icons.SETTINGS,
                                                 size=20,
                                                 color=current_color_scheme.primary,
                                             ),
                                             ft.Text(
-                                                value=username or "Usuário",
+                                                value="Perfil",
                                                 size=14,
                                                 color=current_color_scheme.primary,
-                                                overflow=ft.TextOverflow.ELLIPSIS,
                                             ),
                                         ]
                                     ),
@@ -247,23 +247,6 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                     on_click=lambda e: app_state.get("toggle_theme", lambda: None)()
                                 ),
                                 ft.PopupMenuItem(),
-                                ft.PopupMenuItem(
-                                    content=ft.Row(
-                                        controls=[
-                                            ft.Icon(
-                                                name=ft.Icons.SETTINGS,
-                                                size=20,
-                                                color=current_color_scheme.primary,
-                                            ),
-                                            ft.Text(
-                                                value="Perfil",
-                                                size=14,
-                                                color=current_color_scheme.primary,
-                                            ),
-                                        ]
-                                    ),
-                                    on_click=lambda e: page.go("/profile")
-                                ),
                                 ft.PopupMenuItem(
                                     content=ft.Row(
                                         controls=[

@@ -49,7 +49,7 @@ def RegisterPage(page: ft.Page):
         width=300,
         border_color=ft.Colors.BLUE,
         focused_border_color=ft.Colors.BLUE,
-        border_radius=10,
+        border_radius=5,
         disabled=True
     )
     email_field = ft.TextField(
@@ -57,7 +57,7 @@ def RegisterPage(page: ft.Page):
         width=300,
         border_color=ft.Colors.BLUE,
         focused_border_color=ft.Colors.BLUE,
-        border_radius=10,
+        border_radius=5,
         keyboard_type="email",
         prefix_icon=ft.Icons.EMAIL,
         disabled=True
