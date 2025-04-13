@@ -11,7 +11,7 @@ import flet as ft
 from dotenv import load_dotenv
 
 from components.app_layout import get_usage_data
-from utils.supabase_utils import read_supabase, write_supabase
+from utils.supabase_utils import read_supabase, write_supabase, read_upgrade_request
 from utils.theme_utils import get_current_color_scheme
 
 load_dotenv()
@@ -47,7 +47,7 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             content=ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Icon(ft.Icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN_400),
+                        ft.Icon(ft.icons.CHECK_CIRCLE, size=50, color=ft.Colors.GREEN_400),
                         ft.Text(message, size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400)
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -91,8 +91,9 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         return ft.Container()
 
     user_data = read_supabase("users_debt", f"?id=eq.{user_id}", page)
-    current_email = user_data.get("email", "Alisondev77@hotmail.com") if user_data else "Alisondev77@hotmail.com"
-    current_plan_id = user_data.get("plan_id", 1) if user_data else 1
+    user_dict = user_data[0] if user_data and isinstance(user_data, list) and len(user_data) > 0 else {}
+    current_email = user_dict.get("email", "Alisondev77@hotmail.com") if user_dict else "Alisondev77@hotmail.com"
+    current_plan_id = user_dict.get("plan_id", 1) if user_dict else 1
     usage_data = get_usage_data(page)
 
     plans_data = [
@@ -101,7 +102,6 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
         {"id": 3, "name": "enterprise", "message_limit": 500, "pdf_limit": 30, "price": "400.00"}
     ]
     current_plan = next((p for p in plans_data if p["id"] == current_plan_id), plans_data[0])
-    # Filtra o plano atual da lista de opções
     available_plans = [p["name"] for p in plans_data if p["name"] != current_plan["name"]]
     plan_dropdown = ft.Dropdown(
         label="Escolher Novo Plano",
@@ -198,7 +198,7 @@ def ProfilePage(page: ft.Page, company_data: dict, app_state: dict):
             page.update()
             return
         logger.info(f"Tentando aplicar mudança para {username} com código {code}")
-        request = read_supabase("upgrade_requests", f"?user_id=eq.{user_id}&code=eq.{code}&status=eq.pending", page)
+        request = read_upgrade_request(user_id, code, page)
 
         if isinstance(request, dict):
             request_list = [request]

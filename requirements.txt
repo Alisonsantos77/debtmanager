@@ -7,3 +7,4 @@ requests
 twilio
 python-dotenv
 flet-lottie
+supabase

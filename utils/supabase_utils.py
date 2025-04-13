@@ -1,153 +1,206 @@
-import requests
 import os
-import logging
 from dotenv import load_dotenv
-from flet.security import decrypt, encrypt
+import logging
 import flet as ft
+from supabase import create_client, Client
+from flet.security import decrypt
 
 load_dotenv()
-
-SUPABASE_KEY_USERS = os.getenv("SUPABASE_KEY_USERS")
-SUPABASE_URL_USERS = os.getenv("SUPABASE_URL_USERS")
-SECRET_KEY = os.getenv("MY_APP_SECRET_KEY")
-headers = {"apikey": SUPABASE_KEY_USERS, "Authorization": f"Bearer {SUPABASE_KEY_USERS}", "Content-Type": "application/json"}
-
 logger = logging.getLogger(__name__)
 
+SUPABASE_URL = os.getenv("SUPABASE_URL_USERS")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY_USERS")
 
-def read_supabase(endpoint: str, query: str = "", page: ft.Page = None) -> dict:
-    url = f"{SUPABASE_URL_USERS}/rest/v1/{endpoint}{query}"
-    logger.info(f"Tentando ler do Supabase: {url}")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    logger.error(
+        f"Erro: Variáveis do Supabase não encontradas! SUPABASE_URL={SUPABASE_URL}, SUPABASE_KEY={SUPABASE_KEY}")
+    raise ValueError("SUPABASE_URL e SUPABASE_KEY são obrigatórios. Verifique o arquivo .env.")
+
+# Inicializa o cliente do Supabase
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def read_supabase(table: str, query: str, page: ft.Page):
+    """Lê dados de uma tabela do Supabase usando o SDK."""
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"Dados lidos com sucesso: {len(data)} registros")
-        return data[0] if len(data) == 1 else data
-    except requests.RequestException as e:
-        logger.error(f"Erro ao ler do Supabase: {e}")
-        if page:
-            page.open(ft.SnackBar(
-                ft.Text("Deu ruim ao carregar os dados. Tenta de novo?"), bgcolor=ft.colors.ERROR))
-            page.update()
-        return {}
+        filters = parse_query(query)
+        query_builder = supabase.table(table).select("*")
+
+        for key, value in filters.items():
+            if key == 'eq':
+                for field, val in value.items():
+                    query_builder = query_builder.eq(field, val)
+
+        response = query_builder.execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Erro ao ler Supabase ({table}): {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao consultar dados: {e}", color=ft.Colors.ERROR)))
+        return None
 
 
-def write_supabase(endpoint: str, data: dict, method="post", page: ft.Page = None) -> bool:
-    url = f"{SUPABASE_URL_USERS}/rest/v1/{endpoint}"
-    logger.info(f"Escrevendo no Supabase: {url} com método {method} e dados {data}")
+def write_supabase(table: str, data: dict, method: str = "post", page: ft.Page = None):
+    """Escreve ou atualiza dados no Supabase usando o SDK."""
     try:
-        if method == "post":
-            response = requests.post(url, headers=headers, json=data)
-        elif method == "patch":
-            response = requests.patch(url, headers=headers, json=data)
-        else:
-            raise ValueError("Método inválido")
-        response.raise_for_status()
-        logger.info(f"Escrita bem-sucedida: {response.status_code}")
-        return True
-    except requests.RequestException as e:
-        logger.error(f"Erro ao escrever no Supabase: {e}")
+        table_name = table
+        filters = {}
+        if '?' in table:
+            table_name, query = table.split('?', 1)
+            filters = parse_query(query)
+
+        if method.lower() == "post":
+            response = supabase.table(table_name).insert(data).execute()
+        elif method.lower() == "patch":
+            query_builder = supabase.table(table_name).update(data)
+            if filters:
+                for key, value in filters.items():
+                    if key == 'eq':
+                        for field, val in value.items():
+                            query_builder = query_builder.eq(field, val)
+            elif 'id' in data:
+                query_builder = query_builder.eq('id', data['id'])
+            else:
+                logger.error("Patch precisa de 'id' no data ou filtros REST")
+                return False
+            response = query_builder.execute()
+        return bool(response.data)
+    except Exception as e:
+        logger.error(f"Erro ao escrever no Supabase ({table}): {e}")
         if page:
-            page.open(ft.SnackBar(
-                ft.Text("Deu ruim ao atualizar os dados. Tenta de novo?"), bgcolor=ft.colors.ERROR))
-            page.update()
+            page.open(ft.SnackBar(ft.Text(f"Erro ao salvar dados: {e}", color=ft.Colors.ERROR)))
         return False
 
 
-def fetch_user_id(username: str, page: ft.Page = None) -> str:
-    logger.info(f"Buscando user_id para username: {username}")
-    data = read_supabase("users_debt", f"?username=eq.{username}", page)
-    user_id = data.get("id") if data else None
-    if not user_id:
-        logger.error(f"User_id não encontrado para username: {username}")
-        if page:
-            page.open(ft.SnackBar(
-                ft.Text("Não consegui pegar seu ID. Tenta relogar?"), bgcolor=ft.colors.ERROR))
-            page.update()
-    return user_id
-
-
-def fetch_user_data(user_id: str, page: ft.Page = None) -> dict:
-    logger.info(f"Buscando dados do usuário para user_id: {user_id}")
-    data = read_supabase("users_debt", f"?id=eq.{user_id}", page)
-    if not data:
-        logger.error(f"Dados do usuário não encontrados para user_id: {user_id}")
-        if page:
-            page.open(ft.SnackBar(
-                ft.Text("Não consegui pegar seus dados. Tenta relogar?"), bgcolor=ft.colors.ERROR))
-            page.update()
-    return data
-
-
-def fetch_plan_data(plan_id: int, page: ft.Page = None) -> dict:
-    logger.info(f"Buscando dados do plano para plan_id: {plan_id}")
-    data = read_supabase("plans", f"?id=eq.{plan_id}", page)
-    if not data:
-        logger.error(f"Plano não encontrado para plan_id: {plan_id}")
-        if page:
-            page.open(ft.SnackBar(
-                ft.Text("Não consegui pegar os dados do plano. Tenta relogar?"), bgcolor=ft.colors.ERROR))
-            page.update()
-    return data
-
-
-def update_usage_data(user_id: str, messages_sent: int, pdfs_processed: int, page: ft.Page = None) -> bool:
-    data = {"messages_sent": messages_sent, "pdfs_processed": pdfs_processed}
-    logger.info(f"Atualizando uso para user_id {user_id}: {data}")
-    success = write_supabase(f"users_debt?id=eq.{user_id}", data, method="patch", page=page)
-    if success:
-        logger.info("Atualização de uso concluída com sucesso")
-    else:
-        logger.error("Falha ao atualizar uso")
-    return success
-
-
-def validate_user(username: str, code: str, encrypted: bool = False, page: ft.Page = None) -> tuple:
-    logger.info(f"Validando usuário: {username}")
-    data = read_supabase("users_debt", f"?username=eq.{username}", page)
-    if not data:
-        logger.warning(f"Usuário {username} não encontrado")
-        if page:
-            page.open(ft.SnackBar(
-                ft.Text("Empresa não encontrada. Tenta de novo!"), bgcolor=ft.colors.ERROR))
-            page.update()
-        return "not_found", None
-    user = data
+def fetch_user_id(username: str, page: ft.Page):
+    """Busca o ID do usuário pelo username."""
     try:
-        stored_code = user["activation_code"]
-        if encrypted and code:
-            decrypted_code = decrypt(stored_code, SECRET_KEY)
-            if decrypted_code != code:
-                logger.warning(f"Código inválido para {username}")
-                if page:
-                    page.open(ft.SnackBar(
-                        ft.Text("Código inválido. Tenta de novo!"), bgcolor=ft.colors.ERROR))
-                    page.update()
-                return "invalid_code", None
-        logger.info(f"Usuário {username} validado com status: {user['status']}")
-        return user["status"], user
+        response = supabase.table("users_debt").select("id").eq("username", username).execute()
+        return response.data[0]["id"] if response.data else None
     except Exception as e:
-        logger.error(f"Erro ao validar código para {username}: {e}")
-        if page:
-            page.open(ft.SnackBar(
-                ft.Text("Erro ao validar código. Tenta de novo!"), bgcolor=ft.colors.ERROR))
-            page.update()
-        return "error", None
+        logger.error(f"Erro ao buscar user_id para {username}: {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao buscar ID do usuário: {e}", color=ft.Colors.ERROR)))
+        return None
 
 
-def update_user_status(username: str, status: str, extra_data: dict = None, page: ft.Page = None) -> bool:
-    data = {"status": status}
-    if extra_data:
-        data.update(extra_data)
-    logger.info(f"Atualizando status de {username} para {status} com dados extras: {extra_data}")
-    success = write_supabase(f"users_debt?username=eq.{username}", data, method="patch", page=page)
-    if success:
-        logger.info("Status atualizado com sucesso")
+def fetch_user_data(user_id: str, page: ft.Page):
+    """Busca todos os dados do usuário pelo ID."""
+    try:
+        response = supabase.table("users_debt").select("*").eq("id", user_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Erro ao buscar dados do usuário {user_id}: {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao buscar dados do usuário: {e}", color=ft.Colors.ERROR)))
+        return None
+
+
+def fetch_plan_data(plan_id: int, page: ft.Page):
+    """Busca dados do plano pelo ID."""
+    try:
+        response = supabase.table("plans").select("*").eq("id", plan_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Erro ao buscar dados do plano {plan_id}: {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao buscar dados do plano: {e}", color=ft.Colors.ERROR)))
+        return None
+
+
+def validate_user(username: str, code: str, encrypted: bool = False, page: ft.Page = None):
+    """Valida usuário com base no username e código."""
+    try:
+        response = supabase.table("users_debt").select("*").eq("username", username).execute()
+        if response.data:
+            user = response.data[0]
+            stored_code = user.get("activation_code")
+            status = user.get("status")
+            if not encrypted:
+                if stored_code == code:
+                    return status, user
+            else:
+                try:
+                    decrypted_code = decrypt(stored_code, os.getenv("MY_APP_SECRET_KEY"))
+                    if decrypted_code == code:
+                        return status, user
+                except Exception as e:
+                    logger.error(f"Erro ao descriptografar código para {username}: {e}")
+                    return "invalido", None
+        return "invalido", None
+    except Exception as e:
+        logger.error(f"Erro ao validar usuário {username}: {e}")
+        return "invalido", None
+
+
+def update_user_status(username: str, status: str, additional_data: dict = None, page: ft.Page = None):
+    """Atualiza o status do usuário."""
+    try:
+        user_id = fetch_user_id(username, page)
+        if user_id:
+            data = {"status": status}
+            if additional_data:
+                data.update(additional_data)
+            response = supabase.table("users_debt").update(data).eq("id", user_id).execute()
+            return bool(response.data)
+        return False
+    except Exception as e:
+        logger.error(f"Erro ao atualizar status do usuário {username}: {e}")
         if page:
-            page.open(ft.SnackBar(
-                ft.Text(f"Status de {username} atualizado para {status}")))
-            page.update()
-    else:
-        logger.error("Falha ao atualizar status")
-    return success
+            page.open(ft.SnackBar(ft.Text(f"Erro ao atualizar status: {e}", color=ft.Colors.ERROR)))
+        return False
+
+
+def update_usage_data(user_id: str, messages_sent: int, pdfs_processed: int, page: ft.Page):
+    """Atualiza os dados de uso do usuário."""
+    try:
+        response = supabase.table("users_debt").update({
+            "messages_sent": messages_sent,
+            "pdfs_processed": pdfs_processed
+        }).eq("id", user_id).execute()
+        return bool(response.data)
+    except Exception as e:
+        logger.error(f"Erro ao atualizar uso do usuário {user_id}: {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao atualizar uso: {e}", color=ft.Colors.ERROR)))
+        return False
+
+
+def get_usage_data(user_id: str, page: ft.Page):
+    """Busca dados de uso do usuário."""
+    try:
+        response = supabase.table("users_debt").select(
+            "messages_sent, pdfs_processed, plan_id").eq("id", user_id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Erro ao buscar uso do usuário {user_id}: {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao buscar uso: {e}", color=ft.Colors.ERROR)))
+        return None
+
+
+def read_upgrade_request(user_id: str, code: str, page: ft.Page):
+    """Busca upgrade_request com múltiplos filtros."""
+    try:
+        response = supabase.table("upgrade_requests")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .eq("code", code)\
+            .eq("status", "pending")\
+            .execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Erro ao buscar upgrade request: {e}")
+        page.open(ft.SnackBar(ft.Text(f"Erro ao buscar solicitação: {e}", color=ft.Colors.ERROR)))
+        return []
+
+
+def parse_query(query: str) -> dict:
+    """Converte query REST (ex.: ?id=eq.123) pra dict pro SDK."""
+    if not query:
+        return {}
+    filters = {}
+    query = query.lstrip('?')
+    for part in query.split('&'):
+        if '=' in part:
+            key, value = part.split('=', 1)
+            if '.' in value:
+                op, val = value.split('.', 1)
+                if op not in filters:
+                    filters[op] = {}
+                filters[op][key] = val
+    return filters
