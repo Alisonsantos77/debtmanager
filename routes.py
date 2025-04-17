@@ -1,8 +1,9 @@
+import asyncio
 import logging
 import os
-import flet as ft
 from datetime import datetime, timedelta
-import asyncio
+
+import flet as ft
 
 from components.activation import ActivationPage
 from components.app_layout import create_app_layout
@@ -14,8 +15,8 @@ from components.profile_page import ProfilePage
 from components.register import RegisterPage
 from components.terms_page import TermsPage
 from utils.database import get_client_history
-from utils.theme_utils import get_current_color_scheme
 from utils.supabase_utils import fetch_user_data
+from utils.theme_utils import get_current_color_scheme
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +29,28 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
     user_id = page.client_storage.get(f"{prefix}user_id")
     URL_DICEBEAR = os.getenv("URL_DICEBEAR")
 
+    def show_snack_bar(message: str, color: str = None):
+        """Mostra uma mensagem de feedback para o usuário"""
+        page.open(ft.SnackBar(
+            content=ft.Text(message),
+            bgcolor=color if color else current_color_scheme.primary,
+            action="OK",
+            action_color=ft.Colors.WHITE,
+        ))
 
     def logout(e):
-        page.client_storage.clear()  # Limpa o armazenamento
-        page.views.clear()  # Limpa as views pra evitar cache
+        page.client_storage.clear()
+        page.views.clear()
         logger.info("Usuário deslogado e Client Storage limpo")
         page.close(dlg_modal)
+        show_snack_bar("Logout realizado com sucesso!")
         page.go("/login")
         page.update()
-        
+
     def handle_close(e):
         page.close(dlg_modal)
         page.update()
-        
+
     dlg_modal = ft.AlertDialog(
         title=ft.Text("Confirmação"),
         content=ft.Text("Você realmente deseja sair?"),
@@ -53,6 +63,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             ft.Text("Modal dialog dismissed"),
         ),
     )
+
     async def get_client_storage_async(page, key, timeout=2):
         """Busca assíncrona do client_storage com timeout."""
         try:
@@ -65,9 +76,11 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             return result
         except asyncio.TimeoutError:
             logger.error(f"Timeout ao buscar {key} do client_storage")
+            show_snack_bar("Erro ao carregar dados. Tente novamente.", ft.Colors.RED)
             return None
         except Exception as e:
             logger.error(f"Erro inesperado ao buscar {key} do client_storage: {e}")
+            show_snack_bar("Erro inesperado. Por favor, tente novamente.", ft.Colors.RED)
             return None
 
     class CountDown(ft.Text):
@@ -77,6 +90,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             self.executando = False
             self.value = "Carregando..."
             self.expiration_date = None
+            self.error_count = 0
+            self.max_retries = 3
 
         def did_mount(self):
             self.executando = True
@@ -90,35 +105,56 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             prefix = os.getenv("PREFIX")
             expiration_key = f"{prefix}data_expiracao"
 
-            # Tenta pegar do client_storage com timeout
-            expiration_str = await get_client_storage_async(self.page, expiration_key)
-
-            if not expiration_str and user_id:
-                logger.info("Data_expiracao não encontrada no client_storage, buscando no Supabase")
+            while self.error_count < self.max_retries:
                 try:
-                    user_data = fetch_user_data(user_id, self.page)
-                    if user_data and "data_expiracao" in user_data:
-                        expiration_str = user_data.get("data_expiracao")
-                        self.page.client_storage.set(expiration_key, expiration_str)
-                        logger.info(f"Data_expiracao salva no client_storage: {expiration_str}")
-                    else:
-                        logger.warning("Nenhuma data_expiracao encontrada no Supabase")
+                    # Tenta pegar do client_storage com timeout
+                    expiration_str = await get_client_storage_async(self.page, expiration_key)
+
+                    if not expiration_str and user_id:
+                        logger.info("Data_expiracao não encontrada no client_storage, buscando no Supabase")
+                        try:
+                            user_data = fetch_user_data(user_id, self.page)
+                            if user_data and "data_expiracao" in user_data:
+                                expiration_str = user_data.get("data_expiracao")
+                                self.page.client_storage.set(expiration_key, expiration_str)
+                                logger.info(f"Data_expiracao salva no client_storage: {expiration_str}")
+                            else:
+                                logger.warning("Nenhuma data_expiracao encontrada no Supabase")
+                                show_snack_bar("Erro ao carregar data de expiração", ft.Colors.ORANGE)
+                        except Exception as e:
+                            logger.error(f"Erro ao buscar dados do Supabase: {e}")
+                            self.error_count += 1
+                            if self.error_count < self.max_retries:
+                                await asyncio.sleep(2 ** self.error_count)  # Backoff exponencial
+                                continue
+                            show_snack_bar("Erro ao carregar dados. Tente novamente mais tarde.", ft.Colors.RED)
+                            return
+
+                    if not expiration_str:
+                        self.value = "Sem expiração!"
+                        self.update()
+                        return
+
+                    try:
+                        self.expiration_date = datetime.fromisoformat(expiration_str.replace("Z", "+00:00"))
+                        logger.info(f"Contador iniciado com expiration_date: {self.expiration_date}")
+                        await self.atualizar_timer()
+                        return
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Erro ao parsear data_expiracao: {e}")
+                        self.value = "Data inválida!"
+                        self.update()
+                        show_snack_bar("Data de expiração inválida", ft.Colors.RED)
+                        return
+
                 except Exception as e:
-                    logger.error(f"Erro ao buscar dados do Supabase: {e}")
-
-            if not expiration_str:
-                self.value = "Sem expiração!"
-                self.update()
-                return
-
-            try:
-                self.expiration_date = datetime.fromisoformat(expiration_str.replace("Z", "+00:00"))
-                logger.info(f"Contador iniciado com expiration_date: {self.expiration_date}")
-                await self.atualizar_timer()
-            except (ValueError, TypeError) as e:
-                logger.error(f"Erro ao parsear data_expiracao: {e}")
-                self.value = "Data inválida!"
-                self.update()
+                    logger.error(f"Erro inesperado: {e}")
+                    self.error_count += 1
+                    if self.error_count < self.max_retries:
+                        await asyncio.sleep(2 ** self.error_count)
+                        continue
+                    show_snack_bar("Erro ao carregar contador. Tente novamente mais tarde.", ft.Colors.RED)
+                    return
 
         async def atualizar_timer(self):
             """Atualiza o contador em tempo real."""
@@ -147,17 +183,20 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
             "plan": company_data.get("plan", "basic")
         })
 
-
         class create_appbar(ft.AppBar):
             def __init__(self, title):
                 countdown = CountDown(page) if user_id else ft.Text("Carregando em breve...", size=14)
 
                 super().__init__(
-                    title=ft.Text(
-                        f"{title}",
-                        size=20,
-                        weight=ft.FontWeight.BOLD,
-                        color=current_color_scheme.primary
+                    title=ft.AnimatedSwitcher(
+                        content=ft.Text(
+                            f"{title}",
+                            size=20,
+                            weight=ft.FontWeight.BOLD,
+                            color=current_color_scheme.primary
+                        ),
+                        transition=ft.AnimatedSwitcherTransition.SCALE,
+                        duration=300,
                     ),
                     bgcolor=current_color_scheme.background,
                     center_title=True,
@@ -173,9 +212,13 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                         width=45,
                                         height=45,
                                     ),
-                                    ft.Container(
-                                        content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
-                                        alignment=ft.alignment.bottom_left,
+                                    ft.AnimatedSwitcher(
+                                        content=ft.Container(
+                                            content=ft.CircleAvatar(bgcolor=ft.Colors.GREEN, radius=5),
+                                            alignment=ft.alignment.bottom_left,
+                                        ),
+                                        transition=ft.AnimatedSwitcherTransition.SCALE,
+                                        duration=300,
                                     ),
                                 ],
                                 width=35,
@@ -208,7 +251,8 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                                                 color=current_color_scheme.primary,
                                             ),
                                             ft.Text(
-                                                value=page.client_storage.get(f"{prefix}user_plan") or "Plano Básico",
+                                                value=page.client_storage.get(
+                                                    f"{prefix}user_plan") or "Plano Básico",
                                                 size=14,
                                                 color=current_color_scheme.primary,
                                             ),
@@ -267,7 +311,7 @@ def setup_routes(page: ft.Page, layout, layout_data, app_state, company_data: di
                             ]
                         ),
                     ]
-        )
+                )
         page.views.clear()
         page.title = "Login"
         page.views.append(

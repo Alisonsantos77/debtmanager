@@ -38,7 +38,8 @@ def verificar_status_usuario(page):
 
             # Redireciona se não houver user_id e o usuário estiver fora da tela de login ou cadastro
             if not user_id and page.route not in ["/login", "/register", "/terms", "/activation"]:
-                logger.warning("Usuário não autenticado e fora das rotas de autenticação. Redirecionando para a página de login...")
+                logger.warning(
+                    "Usuário não autenticado e fora das rotas de autenticação. Redirecionando para a página de login...")
                 page.client_storage.clear()
                 page.go("/login")
                 return
@@ -93,21 +94,51 @@ def verificar_status_usuario(page):
 
 def main(page: ft.Page):
     page.window.height = 720.0
-    page.window.min_height = 960.0
+    page.window.min_height = 720.0
     page.window.max_height = 1080.0
-    page.window.min_width = 1280.0
+    page.window.min_width = 1024.0
     page.window.width = 1280.0
+    page.window.max_width = 1920.0
+
     def page_resized(e):
-        print("New page size:", page.window.width, page.window.height)
+        logger.info(f"Tamanho da janela alterado: {page.window.width}x{page.window.height}")
+        if page.window.width < 1280:
+            page.padding = 10
+        else:
+            page.padding = 20
+        page.update()
 
     page.on_resized = page_resized
 
-    cores_light = {"primary": "#3B82F6", "on_primary": "#FFFFFF",
-                   "primary_container": "#DBEAFE", "on_surface": "#111827", "surface": "#F9FAFB"}
-    cores_dark = {"primary": "#60A5FA", "on_primary": "#1E3A8A",
-                  "primary_container": "#1E3A8A", "on_surface": "#FFFFFF", "surface": "#111827"}
-    page.theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_light))
-    page.dark_theme = ft.Theme(color_scheme=ft.ColorScheme(**cores_dark))
+    cores_light = {
+        "primary": "#3B82F6",
+        "on_primary": "#FFFFFF",
+        "primary_container": "#DBEAFE",
+        "on_surface": "#111827",
+        "surface": "#F9FAFB",
+        "background": "#FFFFFF",
+        "error": "#EF4444"
+    }
+
+    cores_dark = {
+        "primary": "#60A5FA",
+        "on_primary": "#1E3A8A",
+        "primary_container": "#1E3A8A",
+        "on_surface": "#FFFFFF",
+        "surface": "#111827",
+        "background": "#1F2937",
+        "error": "#F87171"
+    }
+
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(**cores_light),
+        use_material3=True
+    )
+    page.dark_theme = ft.Theme(
+        color_scheme=ft.ColorScheme(**cores_dark),
+        use_material3=True
+    )
+
     theme_mode = page.client_storage.get("theme_mode") or "DARK"
     page.theme_mode = ft.ThemeMode.LIGHT if theme_mode == "LIGHT" else ft.ThemeMode.DARK
 

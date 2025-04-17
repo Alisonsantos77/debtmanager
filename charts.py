@@ -36,7 +36,7 @@ class ChartWithDateFilter(ft.Column):
             logger.info("Nenhum dado disponível para gráficos")
             snack = ft.SnackBar(
                 content=ft.Text("Carregue um relatório em /clients para ver os gráficos"),
-                bgcolor=ft.colors.BLUE_GREY,
+                bgcolor=ft.Colors.BLUE_GREY,
                 duration=3000, 
             )
             self.page.overlay.append(snack)
@@ -227,7 +227,7 @@ class ChartWithDateFilter(ft.Column):
                 labels_size=50,
                 title=ft.Text("Valor (R$)", size=16)
             ),
-            tooltip_bgcolor=ft.colors.with_opacity(0.8, current_color_scheme.surface_variant),
+            tooltip_bgcolor=ft.Colors.with_opacity(0.8, current_color_scheme.surface_variant),
             max_y=max(debt_by_month.values(), default=100) * 1.2,
             expand=True
         )
@@ -272,7 +272,7 @@ class ChartWithDateFilter(ft.Column):
                 labels_size=50,
                 title=ft.Text("Taxa (%)", size=16)
             ),
-            tooltip_bgcolor=ft.colors.with_opacity(0.8, current_color_scheme.surface_variant),
+            tooltip_bgcolor=ft.Colors.with_opacity(0.8, current_color_scheme.surface_variant),
             expand=True
         )
 

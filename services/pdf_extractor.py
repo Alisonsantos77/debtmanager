@@ -32,20 +32,20 @@ class PDFExtractor:
         if not isinstance(self.pdf_path, str):
             logger.error(f"Caminho do PDF inválido: {self.pdf_path} (não é string)")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Caminho do PDF inválido: {self.pdf_path} (não é string)", color=ft.colors.ERROR)))
+                ft.Text(f"Erro: Caminho do PDF inválido: {self.pdf_path} (não é string)", color=ft.Colors.ERROR)))
             self.page.update()
             return False
 
         if not self.pdf_path.lower().endswith('.pdf'):
             logger.error(f"Arquivo não é PDF: {self.pdf_path}")
-            self.page.open(ft.SnackBar(ft.Text(f"Erro: O arquivo {self.pdf_path} não é um PDF!", color=ft.colors.ERROR)))
+            self.page.open(ft.SnackBar(ft.Text(f"Erro: O arquivo {self.pdf_path} não é um PDF!", color=ft.Colors.ERROR)))
             self.page.update()
             return False
 
         if not os.path.exists(self.pdf_path):
             logger.error(f"Arquivo não encontrado: {self.pdf_path}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: O arquivo {self.pdf_path} não foi encontrado!", color=ft.colors.ERROR)))
+                ft.Text(f"Erro: O arquivo {self.pdf_path} não foi encontrado!", color=ft.Colors.ERROR)))
             self.page.update()
             return False
 
@@ -53,7 +53,7 @@ class PDFExtractor:
             with open(self.pdf_path, 'rb') as f:
                 if os.path.getsize(self.pdf_path) == 0:
                     logger.warning(f"PDF vazio: {self.pdf_path}")
-                    self.page.open(ft.SnackBar(ft.Text(f"Erro: O PDF {self.pdf_path} tá vazio!", color=ft.colors.ERROR)))
+                    self.page.open(ft.SnackBar(ft.Text(f"Erro: O PDF {self.pdf_path} tá vazio!", color=ft.Colors.ERROR)))
                     self.page.update()
                     return False
             logger.info(f"Caminho do PDF validado com sucesso: {self.pdf_path}")
@@ -61,13 +61,13 @@ class PDFExtractor:
         except PermissionError as e:
             logger.error(f"Permissão negada ao abrir PDF: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Permissão negada ao abrir o PDF. Suporte: {e}", color=ft.colors.ERROR)))
+                ft.Text(f"Erro: Permissão negada ao abrir o PDF. Suporte: {e}", color=ft.Colors.ERROR)))
             self.page.update()
             return False
         except Exception as e:
             logger.error(f"Erro inesperado ao validar PDF: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Algo deu errado ao abrir o PDF. Suporte: {e}", color=ft.colors.ERROR)))
+                ft.Text(f"Erro: Algo deu errado ao abrir o PDF. Suporte: {e}", color=ft.Colors.ERROR)))
             self.page.update()
             return False
 
@@ -82,7 +82,7 @@ class PDFExtractor:
             doc = pp.open(self.pdf_path)
             if doc.page_count == 0:
                 logger.warning(f"PDF sem páginas: {self.pdf_path}")
-                self.page.open(ft.SnackBar(ft.Text("Erro: Esse PDF tá vazio ou sem páginas!", color=ft.colors.ERROR)))
+                self.page.open(ft.SnackBar(ft.Text("Erro: Esse PDF tá vazio ou sem páginas!", color=ft.Colors.ERROR)))
                 self.page.update()
                 doc.close()
                 return ""
@@ -98,7 +98,7 @@ class PDFExtractor:
 
             if not text.strip():
                 logger.warning(f"PDF sem texto útil: {self.pdf_path}")
-                self.page.open(ft.SnackBar(ft.Text("Erro: Esse PDF não tem texto útil!", color=ft.colors.ERROR)))
+                self.page.open(ft.SnackBar(ft.Text("Erro: Esse PDF não tem texto útil!", color=ft.Colors.ERROR)))
                 self.page.update()
                 return ""
 
@@ -108,13 +108,13 @@ class PDFExtractor:
             return encrypted_text
         except pp.PyMuPDFError as e:
             logger.error(f"Erro do PyMuPDF ao ler PDF: {e}")
-            self.page.open(ft.SnackBar(ft.Text(f"Erro: Problema ao ler o PDF. Suporte: {e}", color=ft.colors.ERROR)))
+            self.page.open(ft.SnackBar(ft.Text(f"Erro: Problema ao ler o PDF. Suporte: {e}", color=ft.Colors.ERROR)))
             self.page.update()
             return ""
         except Exception as e:
             logger.error(f"Erro inesperado ao extrair texto: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Algo deu errado ao extrair o texto. Suporte: {e}", color=ft.colors.ERROR)))
+                ft.Text(f"Erro: Algo deu errado ao extrair o texto. Suporte: {e}", color=ft.Colors.ERROR)))
             self.page.update()
             return ""
 
@@ -143,13 +143,13 @@ class PDFExtractor:
             else:
                 logger.warning("Texto não parece ser um relatório de inadimplência válido")
                 self.page.open(ft.SnackBar(
-                    ft.Text("Erro: Esse PDF não parece ser um relatório de inadimplência!", color=ft.colors.ERROR)))
+                    ft.Text("Erro: Esse PDF não parece ser um relatório de inadimplência!", color=ft.Colors.ERROR)))
                 self.page.update()
                 return False
         except Exception as e:
             logger.error(f"Erro ao validar texto extraído: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Problema ao validar o texto extraído. Suporte: {e}", color=ft.colors.ERROR)))
+                ft.Text(f"Erro: Problema ao validar o texto extraído. Suporte: {e}", color=ft.Colors.ERROR)))
             self.page.update()
             return False
 
@@ -208,7 +208,7 @@ class PDFExtractor:
                         except json.JSONDecodeError as e:
                             logger.error(f"Erro ao parsear JSON do Claude no chunk {i}: {e}")
                             self.page.open(ft.SnackBar(
-                                ft.Text(f"Erro: Problema ao interpretar o JSON do Claude no chunk {i}. Suporte: {e}", color=ft.colors.RED)))
+                                ft.Text(f"Erro: Problema ao interpretar o JSON do Claude no chunk {i}. Suporte: {e}", color=ft.Colors.RED)))
 
             clients_list = list(clients_data.values())
             if not clients_list:
@@ -219,13 +219,13 @@ class PDFExtractor:
 
         except anthropic.APIError as e:
             logger.error(f"Erro na API do Anthropic: {e}")
-            self.page.open(ft.SnackBar(ft.Text(f"Erro: Problema na API do Claude. Suporte: {e}", color=ft.colors.RED)))
+            self.page.open(ft.SnackBar(ft.Text(f"Erro: Problema na API do Claude. Suporte: {e}", color=ft.Colors.RED)))
             self.page.update()
             return []
         except Exception as e:
             logger.error(f"Erro inesperado ao extrair com Claude: {e}")
             self.page.open(ft.SnackBar(
-                ft.Text(f"Erro: Algo deu errado ao extrair com Claude. Suporte: {e}", color=ft.colors.RED)))
+                ft.Text(f"Erro: Algo deu errado ao extrair com Claude. Suporte: {e}", color=ft.Colors.RED)))
             self.page.update()
             return []
 

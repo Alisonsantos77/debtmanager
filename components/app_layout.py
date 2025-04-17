@@ -82,7 +82,7 @@ def create_app_layout(page: ft.Page):
         logger.warning("Username não encontrado no client_storage. Redirecionando para login.")
         CustomSnackBar(
             content=ft.Text("Usuário não autenticado. Você será redirecionado para a página de login."),
-            bgcolor=ft.colors.ERROR,
+            bgcolor=ft.Colors.ERROR,
             duration=3000
         ).show(page)
         page.go("/login")
@@ -93,7 +93,7 @@ def create_app_layout(page: ft.Page):
         logger.error(f"User_id não encontrado para {username}. Redirecionando para login.")
         CustomSnackBar(
             content=ft.Text("Identificador de usuário não encontrado. Por favor, tente fazer login novamente."),
-            bgcolor=ft.colors.ERROR,
+            bgcolor=ft.Colors.ERROR,
             duration=3000
         ).show(page)
         page.go("/login")
@@ -104,7 +104,7 @@ def create_app_layout(page: ft.Page):
         logger.error(f"Dados do usuário não carregados para {user_id}. Redirecionando para login.")
         CustomSnackBar(
             content=ft.Text("Erro ao carregar os dados do usuário. Por favor, realize o login novamente."),
-            bgcolor=ft.colors.ERROR,
+            bgcolor=ft.Colors.ERROR,
             duration=3000
         ).show(page)
         page.go("/login")
@@ -367,7 +367,7 @@ def create_app_layout(page: ft.Page):
                 else:
                     logger.error(f"Falha para {client.name}")
                 dialogs["progress_bar"].value = (idx + 1) / total_clients
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(5)
                 page.update()
             last_sent_ = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             increment_usage("messages_sent", success_count)
