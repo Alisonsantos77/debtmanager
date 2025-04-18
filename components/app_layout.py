@@ -70,13 +70,12 @@ def create_app_layout(page: ft.Page):
     current_page = 0
     client_list_view = ft.ListView(expand=True, spacing=5, padding=10, auto_scroll=True)
     messages_view = ft.Column(expand=True, spacing=20, auto_scroll=True)
-    message_manager = MessageManager()
+    message_manager = MessageManager(page)
     last_sent = None
     selected_client = None
 
     prefix = "debtmanager."
     username = page.client_storage.get(f"{prefix}username")
-
 
     if not username:
         logger.warning("Username não encontrado no client_storage. Redirecionando para login.")
@@ -136,13 +135,22 @@ def create_app_layout(page: ft.Page):
         size=14, color=current_color_scheme.primary
     )
     message_input = ft.TextField(
-        label="Mensagem", multiline=True, value=message_templates.get_template("Padrão"), expand=True,
-        hint_text="Digite ou edite a mensagem (use {name}, {debt_amount}, {due_date}, {reason})",
+        label="Mensagem",
+        multiline=True,
+        value=message_templates.get_template("Padrão"),
+        expand=True,
+        read_only=True,
+        hint_text="Selecione um modelo de mensagem acima",
         color=current_color_scheme.on_surface
     )
     bulk_message_input = ft.TextField(
-        label="Mensagem para Todos", multiline=True, width=400, value=message_templates.get_template("Padrão"),
-        hint_text="Use {name}, {debt_amount}, {due_date}, {reason}", color=current_color_scheme.on_surface
+        label="Mensagem para Todos",
+        multiline=True,
+        width=400,
+        value=message_templates.get_template("Padrão"),
+        read_only=True,
+        hint_text="Selecione um modelo de mensagem acima",
+        color=current_color_scheme.on_surface
     )
     history = []
 
@@ -256,6 +264,17 @@ def create_app_layout(page: ft.Page):
     def check_usage_limits(key):
         limits = {"messages_sent": message_limit, "pdfs_processed": pdf_limit}
         current_value = local_messages_sent if key == "messages_sent" else local_pdfs_processed
+        limit = limits[key]
+
+        # Verifica se está próximo do limite (10% restante)
+        if current_value >= limit * 0.9 and current_value < limit:
+            warning_message = f"Faltam apenas {limit - current_value} {key.replace('_', ' ')}! Considere fazer um upgrade do plano."
+            CustomSnackBar(
+                content=ft.Text(warning_message),
+                bgcolor=ft.Colors.WARNING,
+                duration=5000
+            ).show(page)
+
         return current_value < limits[key]
 
     def increment_usage(key, amount=1):
@@ -309,7 +328,7 @@ def create_app_layout(page: ft.Page):
             dialogs["error_dialog"].open_dialog()
         logger.info(f"Envio para {client.name}: {'sucesso' if success else 'falha'}")
         hide_dialog(loading_dialog)
-        
+
     async def send_bulk_message():
         dialogs["bulk_send_dialog"].close_dialog()
         if not filtered_clients:
@@ -337,61 +356,128 @@ def create_app_layout(page: ft.Page):
         feedback_list = ft.ListView(expand=True, spacing=5, padding=10, auto_scroll=True)
         dialogs["bulk_send_feedback"].controls.append(feedback_list)
         success_count = 0
+        failed_count = 0
+        batch_size = 10  # Tamanho do lote
+        delay_between_batches = 30  # Delay em segundos entre lotes
+
         try:
-            for idx, client in enumerate(eligible_clients[:clients_to_send]):
-                logger.info(f"Enviando para {client.name} ({client.contact})")
+            for batch_start in range(0, clients_to_send, batch_size):
+                batch_end = min(batch_start + batch_size, clients_to_send)
+                current_batch = eligible_clients[batch_start:batch_end]
+                batch_number = (batch_start // batch_size) + 1
+                total_batches = (clients_to_send + batch_size - 1) // batch_size
+
                 feedback_list.controls.append(
-                    ft.Text(f"Enviando para {client.name} ({client.contact})...", italic=True, color=current_color_scheme.primary))
+                    ft.Text(f"Enviando lote {batch_number} de {total_batches}...",
+                            weight=ft.FontWeight.BOLD,
+                            color=current_color_scheme.primary)
+                )
                 page.update()
-                try:
-                    message_body = bulk_message_input.value.format(
-                        name=client.name, debt_amount=client.debt_amount, due_date=client.due_date, reason=client.reason if hasattr(client, 'reason') else "pendência")
-                except KeyError as e:
-                    logger.error(f"Erro na formatação para {client.name}: {e}")
-                    message_body = f"Olá {client.name}, regularize sua pendência de {client.debt_amount} vencida em {client.due_date}."
-                tile = next((t for t in client_list_view.controls if isinstance(
-                    t, ClientListTile) and t.client == client), None)
-                success = message_manager.send_single_notification(client, message_body)
-                feedback_list.controls[-1] = ft.Row([ft.Text(f"{client.name} ({client.contact})", color=current_color_scheme.primary), ft.Icon(
-                    ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR)])
-                if tile:
-                    tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR)
+
+                for idx, client in enumerate(current_batch):
+                    logger.info(f"Enviando para {client.name} ({client.contact})")
+                    feedback_list.controls.append(
+                        ft.Text(f"Enviando para {client.name} ({client.contact})...",
+                                italic=True,
+                                color=current_color_scheme.primary)
+                    )
                     page.update()
-                if success:
-                    success_count += 1
-                    notified_clients.append(client.name)
-                    page.session.set("notified_clients", notified_clients)
-                    history.append(type('HistoryEntry', (), {'sent_at': datetime.datetime.now().strftime(
-                        "%d/%m/%Y %H:%M"), 'status': 'enviado', 'message': message_body, 'client': client.name})())
-                    logger.info(f"Sucesso para {client.name}, notificado")
-                else:
-                    logger.error(f"Falha para {client.name}")
-                dialogs["progress_bar"].value = (idx + 1) / total_clients
-                await asyncio.sleep(5)
-                page.update()
+
+                    try:
+                        message_body = bulk_message_input.value.format(
+                            name=client.name,
+                            debt_amount=client.debt_amount,
+                            due_date=client.due_date,
+                            reason=client.reason if hasattr(client, 'reason') else "pendência"
+                        )
+                    except KeyError as e:
+                        logger.error(f"Erro na formatação para {client.name}: {e}")
+                        message_body = f"Olá {client.name}, regularize sua pendência de {client.debt_amount} vencida em {client.due_date}."
+
+                    tile = next((t for t in client_list_view.controls if isinstance(
+                        t, ClientListTile) and t.client == client), None)
+
+                    success = message_manager.send_single_notification(client, message_body)
+                    feedback_list.controls[-1] = ft.Row([
+                        ft.Text(f"{client.name} ({client.contact})",
+                                color=current_color_scheme.primary),
+                        ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
+                                color=ft.Colors.GREEN if success else ft.Colors.ERROR)
+                    ])
+
+                    if tile:
+                        tile.trailing = ft.Icon(ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
+                                                color=ft.Colors.GREEN if success else ft.Colors.ERROR)
+                        page.update()
+
+                    if success:
+                        success_count += 1
+                        notified_clients.append(client.name)
+                        page.session.set("notified_clients", notified_clients)
+                        history.append(type('HistoryEntry', (), {
+                            'sent_at': datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                            'status': 'enviado',
+                            'message': message_body,
+                            'client': client.name
+                        })())
+                        logger.info(f"Sucesso para {client.name}, notificado")
+                    else:
+                        failed_count += 1
+                        logger.error(f"Falha para {client.name}")
+
+                    dialogs["progress_bar"].value = (batch_start + idx + 1) / total_clients
+                    await asyncio.sleep(5)  # Delay entre mensagens individuais
+                    page.update()
+
+                if batch_end < clients_to_send:
+                    feedback_list.controls.append(
+                        ft.Text(f"Aguardando {delay_between_batches} segundos antes do próximo lote...",
+                                italic=True,
+                                color=current_color_scheme.primary)
+                    )
+                    page.update()
+                    await asyncio.sleep(delay_between_batches)
+
             last_sent_ = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             increment_usage("messages_sent", success_count)
             feedback_list.controls.append(ft.Text(
-                f"Envio concluído às {last_sent_}! ({success_count}/{total_clients} enviados)", weight=ft.FontWeight.BOLD, color=current_color_scheme.primary))
+                f"Envio concluído às {last_sent_}! ({success_count}/{total_clients} enviados, {failed_count} falhas)",
+                weight=ft.FontWeight.BOLD,
+                color=current_color_scheme.primary
+            ))
+
+            if failed_count > 0:
+                feedback_list.controls.append(ft.Text(
+                    f"Detalhes das falhas: {failed_count} mensagens não foram enviadas. Verifique os números de contato.",
+                    color=ft.Colors.ERROR
+                ))
+
             dialogs["bulk_send_feedback_dialog"].dialog.actions[0].disabled = False
             CustomSnackBar(f"Alertas enviados para {success_count} clientes às {last_sent_}!").show(page)
             update_usage_dialog()
             usage_display.value = f"Consumo: {local_messages_sent}/{message_limit} mensagens | {local_pdfs_processed}/{pdf_limit} PDFs"
             usage_display.color = get_current_color_scheme(page).primary
             messages_view.controls = [ft.Text("Mensagens enviadas com sucesso!",
-                                              size=12, color=current_color_scheme.primary)]
+                                              size=12,
+                                              color=current_color_scheme.primary)]
+
             if len(eligible_clients) > clients_to_send:
                 logger.info(f"{len(eligible_clients) - clients_to_send} clientes não enviados por limite")
                 feedback_list.controls.append(ft.Text(
-                    f"Nota: {len(eligible_clients) - clients_to_send} clientes excederam o limite.", color=current_color_scheme.primary))
+                    f"Nota: {len(eligible_clients) - clients_to_send} clientes excederam o limite.",
+                    color=current_color_scheme.primary
+                ))
+
             update_usage_data(user_id, local_messages_sent, local_pdfs_processed, page)
+
         except Exception as e:
             logger.error(f"Erro no envio em massa: {e}")
             feedback_list.controls.append(ft.Text(f"Erro: {str(e)}", color=ft.Colors.ERROR))
             dialogs["bulk_send_feedback_dialog"].dialog.actions[0].disabled = False
             CustomSnackBar("Erro ao enviar para todos.", bgcolor=ft.Colors.ERROR).show(page)
             dialogs["error_dialog"].open_dialog()
-        logger.info(f"Envio em massa concluído: {success_count}/{total_clients} sucessos")
+
+        logger.info(f"Envio em massa concluído: {success_count}/{total_clients} sucessos, {failed_count} falhas")
 
     def update_usage_dialog():
         current_color_scheme_ = get_current_color_scheme(page)
@@ -451,7 +537,7 @@ def create_app_layout(page: ft.Page):
             if not extracted_data:
                 logger.warning("Nenhum cliente extraído.")
                 CustomSnackBar("Nenhum cliente válido encontrado no PDF. Verifique os dados e tente novamente.",
-                            bgcolor=ft.Colors.YELLOW).show(page)
+                               bgcolor=ft.Colors.YELLOW).show(page)
             else:
                 logger.info(f"Extraídos {len(extracted_data)} clientes!")
                 clients_list.extend(extracted_data)
@@ -496,7 +582,8 @@ def create_app_layout(page: ft.Page):
 
         except Exception as e:
             logger.error(f"Erro ao processar PDF: {e}")
-            CustomSnackBar(f"Ocorreu um erro: {str(e)}. Por favor, tente carregar outro PDF.", bgcolor=ft.Colors.ERROR).show(page)
+            CustomSnackBar(f"Ocorreu um erro: {str(e)}. Por favor, tente carregar outro PDF.",
+                           bgcolor=ft.Colors.ERROR).show(page)
             hide_dialog(loading_dialog)
             dialogs["error_dialog"].open_dialog()
 

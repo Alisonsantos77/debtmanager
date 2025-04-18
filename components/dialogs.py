@@ -1,5 +1,7 @@
 import logging
+
 import flet as ft
+
 from utils.theme_utils import get_current_color_scheme
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,19 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
         [ft.TextButton("Fechar", on_click=lambda e: about_dialog.close_dialog())]
     )
 
+    daily_limit_dialog = CustomDialog(
+        ft.Text("Limite Diário por Número", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.YELLOW),
+        ft.Column([
+            ft.Text("Este número já recebeu o máximo de mensagens permitidas para hoje.",
+                    size=16, color=current_color_scheme.on_surface),
+            ft.Text("O limite será resetado à meia-noite.",
+                    size=14, italic=True, color=current_color_scheme.on_surface),
+            ft.Text("Para continuar enviando mensagens hoje, considere usar outro número de contato.",
+                    size=14, color=current_color_scheme.on_surface)
+        ], spacing=10),
+        [ft.TextButton("Entendi", on_click=lambda e: daily_limit_dialog.close_dialog())]
+    )
+
     return {
         "usage_dialog": usage_dialog,
         "bulk_send_dialog": bulk_send_dialog,
@@ -103,5 +118,6 @@ def create_dialogs(page, message_input, bulk_message_input, message_templates, u
         "error_dialog": error_dialog,
         "about_dialog": about_dialog,
         "progress_bar": progress_bar,
-        "bulk_send_feedback": bulk_send_feedback
+        "bulk_send_feedback": bulk_send_feedback,
+        "daily_limit_dialog": daily_limit_dialog
     }
